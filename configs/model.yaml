@@ -12,7 +12,7 @@ comparison:
   encoder: resnet34
   encoder_weights: imagenet
 
-input_channels: 15  # 10 optical bands (BAND_ORDER) + NDVI + BSI + MNDWI + slope + aspect -> computed in-notebook (Step 4), not read from here yet
+input_channels: 16  # 10 optical bands (BAND_ORDER) + NDVI + BSI + MNDWI + slope + aspect + curvature -> computed in-notebook (Step 4), not read from here yet
 
 loss:
   focal_gamma: 2.0

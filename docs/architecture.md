@@ -34,6 +34,20 @@ No district/date/severity field exists anywhere in the source data (`docs/data_c
 
 Most terrain is flat; random negatives would be trivially separable by slope alone and would never test the model on genuinely ambiguous terrain. Density-proportional slope-bin stratification matches the *shape* of the positive slope distribution, not just its range. Hard negatives — drawn from immediately outside the exclusion buffer but inside a slightly larger ring — are adjacent to real failures (same rainfall event, same rough geomorphology) without overlapping them, forcing the model to learn real discriminative signal instead of "steep plus wet."
 
+**Scope limitation, stated explicitly:** stratification matches slope only, not aspect/elevation/land-cover jointly. A self-audit against a fuller terrain-matching checklist flagged this as a real reduction from the original plan, not an equivalent design. Slope is the single strongest, cheapest-to-compute discriminator available without a land-cover raster (which this project doesn't acquire), so it was kept as the one dimension actually implemented — adding the others is a documented future extension, not a silent omission.
+
+## Terrain features: slope, aspect, curvature — and why not more
+
+`slope_aspect()` (finite-difference gradient) and `curvature()` (second-difference Laplacian, sign-flipped so ridges are positive and valleys negative) are both simple, closed-form, and match the "an undergraduate can implement and defend this" bar this project is held to. Neither is a full Zevenbergen & Thorne (1987) or Horn (1981) 3x3 kernel — those are more accurate but harder to derive and verify by hand; the coarser approximation is adequate for stratifying negative samples and giving the model terrain context, not for precision geomorphometry. TWI remains out of scope (flow-accumulation routing) — see `docs/limitations.md`.
+
+## Why MNDWI instead of NDWI, and why not NBR
+
+MNDWI (Modified NDWI, using SWIR instead of NIR) was chosen because it separates water from built-up/bare surfaces more cleanly than the original NDWI — relevant here because exposed, saturated landslide scars can otherwise be confused with water by plain NDWI. NBR (Normalized Burn Ratio) was considered and deliberately excluded: it is a fire/burn-severity index with no established role in landslide susceptibility literature, and adding it just to superficially match a generic remote-sensing feature checklist would be feature engineering without a stated mechanism — the kind of thing a viva panel should reject, not reward.
+
+## A real caveat on `encoder_weights="imagenet"` with a 16-channel input
+
+Both architectures load an ImageNet-pretrained `resnet34` encoder but take a 16-channel input, not ImageNet's native 3 (RGB). `segmentation_models_pytorch` handles the shape mismatch (its `in_channels` argument reshapes the first conv layer), but the pretrained filters are only meaningful for whichever 3 channels approximate RGB — the other 13 channels' first-layer weights are effectively randomly initialized despite `encoder_weights="imagenet"` being set. This is a real, partial-transfer-learning limitation, not a bug: the encoder still benefits from ImageNet's deeper, more generic feature hierarchy, but the "pretrained" label overstates how much of the first layer is actually pretrained for this specific input stack. Worth remembering when comparing the baseline's performance against a hypothetical from-scratch encoder — the gap may be smaller than a naive "pretrained vs. not" framing would suggest.
+
 ## Why Focal+Dice loss
 
 A median positive patch is ~0.05% landslide pixels (`docs/data_card.md`) — plain BCE/accuracy would let the optimizer converge to "predict nothing everywhere" at 95%+ "accuracy." Focal loss down-weights easy background pixels; Dice directly optimizes overlap, which Focal alone doesn't reward.
@@ -44,7 +58,18 @@ U-Net (baseline) and DeepLabV3+ (attention/multi-scale comparison), both via `se
 
 ## What's real vs. synthetic-verified-only
 
-See the notebook's own Step 6 status table. In short: label loading and spatial clustering/CV are verified against the real 4,225-polygon shapefile; everything downstream of actual pixel data (acquisition, preprocessing, sampling, modeling, evaluation) is correctly implemented and self-checked against synthetic fixtures only, because no real Sentinel-2/DEM imagery has been downloaded yet.
+See the notebook's own Step 6 status table. In short: label loading, the label-geometry EDA (minor-axis/area histograms, cluster-balance check), and spatial clustering/CV are verified against the real 4,225-polygon shapefile; everything downstream of actual pixel data (acquisition, preprocessing, sampling, modeling, evaluation, per-cluster metric aggregation) is correctly implemented and self-checked against synthetic fixtures only, because no real Sentinel-2/DEM imagery has been downloaded yet.
+
+## Model comparison: why U-Net + DeepLabV3+ beat the alternatives for this task
+
+Evaluated against this project's actual constraints (irregular polygon targets, ~4,225 labels most under 100 m minor-axis, CPU-capable dev environment plus Colab free-tier GPU, mIoU/pixel-level evaluation mandated by governance rules):
+
+- **Pixel-wise Random Forest / XGBoost:** fast, interpretable, no GPU needed — a reasonable *baseline-of-a-baseline*, but each pixel is classified independently of its neighbors, so the model cannot use shape/texture/context at all. It would need hand-engineered neighborhood features to compensate, still can't produce a smooth boundary, and the extreme class imbalance (~0.05% positive) requires heavy class-weighting that pixel-wise trees handle worse than a loss designed for it (Focal+Dice). Rejected as the primary model; viable as a quick sanity-check baseline if time allows.
+- **Patch-level image classification (ResNet/EfficientNet):** mismatches the task directly — the whole point of the minimum-mappable-unit analysis and `all_touched=True` rasterization was boundary-level precision; collapsing that to one label per patch throws it away, and patch-edge landslides get miscounted or truncated ("edge effect"). Also incompatible with the mIoU metric the governance rules require.
+- **Semantic segmentation (U-Net, DeepLabV3+):** natively pixel-precise, handles irregular/elongated polygon shapes, and DeepLabV3+'s atrous spatial pyramid gives multi-scale context that suits a dataset whose polygon width spans 10 m to 3.5 km. **Chosen** — see "Why two architectures" above for why exactly these two.
+- **Vision Transformers (ViT, Swin):** typically need either a large labeled corpus or a strong pretrained remote-sensing checkpoint to be worth their compute cost; this project has neither a large corpus (most usable positives are well under 1,000 after the MMU filter) nor a verified, appropriately-licensed pretrained segmentation transformer checkpoint to responsibly cite. Higher compute cost for an unproven benefit at this project's scale and timeline. Rejected for implementation; a legitimate discussion-only item for the write-up's future-work section.
+
+**Verdict, unchanged from the original scope lock:** U-Net (baseline) + DeepLabV3+ (comparison), both via `segmentation_models_pytorch`, both on the same 16-channel input stack.
 
 ## Out of scope for this document
 
