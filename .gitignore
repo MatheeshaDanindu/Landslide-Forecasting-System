@@ -11,12 +11,20 @@ models/*
 *.kmz
 *.tif
 *.tiff
+*.nc
 *.shp
 *.shx
 *.dbf
 *.prj
 *.sbn
 *.sbx
+
+# Model weights, wherever they land (not just under models/)
+*.pt
+*.pth
+*.h5
+*.ckpt
+*.onnx
 
 # Credentials
 .env

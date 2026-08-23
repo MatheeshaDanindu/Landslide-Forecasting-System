@@ -23,6 +23,6 @@ This populates:
 
 ## 3. Processed patches (Step 3)
 
-`data/processed/manifest.csv` records, per patch: patch id, source Sentinel-2 product id, sensing date, and CV cluster assignment — the audit trail that makes "pre-event-only" compliance (see `../docs/limitations.md`) independently checkable rather than assumed. The notebook's `manifest_row()` builds one row at a time; writing the full manifest happens once real patches are generated against downloaded imagery (not yet run end-to-end — see the notebook's Status section).
+`data/processed/manifest.csv` will record, per patch: patch id, source Sentinel-2 product id, sensing date, is-positive flag, and CV cluster assignment — the audit trail that makes "pre-event-only" compliance (see `../docs/limitations.md`) independently checkable rather than assumed. `manifest_row()` + `save_manifest()` are demonstrated end-to-end (accumulate rows, write CSV) against one demo row at `data/processed/manifest_demo.csv`; writing the real manifest happens once real patches are generated against downloaded imagery.
 
 Everything under `data/` is derived — regenerating it from `raw/` is always safe, nothing here is hand-edited.

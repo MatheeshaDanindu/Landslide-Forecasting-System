@@ -1,0 +1,12 @@
+random_seed: 42          # numpy + torch — every stochastic step in the pipeline seeds from this one value
+
+clustering:
+  n_clusters: 8           # K-Means over polygon centroids; no district/date field exists in the source data (docs/data_card.md)
+
+buffer_m: 500             # exclusion margin around each held-out test cluster (docs/limitations.md, spatial-CV section)
+
+negative_sampling:
+  exclusion_buffer_m: 40   # keep-out ring around every positive polygon before drawing negatives
+  hard_negative_ring_m: 150  # hard negatives drawn between exclusion_buffer_m and this radius (adjacent-but-stable slopes)
+  slope_bins: 5
+  n_per_bin: 20

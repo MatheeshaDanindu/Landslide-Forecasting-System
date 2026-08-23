@@ -4,7 +4,7 @@ Vision-based landslide susceptibility mapping for Sri Lanka, built on the ACCIMT
 
 ## Project framing
 
-This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and terrain data (slope, aspect, TWI). It is not a real-time forecast and not a certified early-warning system — see [docs/limitations.md](docs/limitations.md) before drawing conclusions from any output.
+This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and DEM-derived terrain (slope, aspect — TWI is a documented future addition, not yet implemented, see [docs/limitations.md](docs/limitations.md)). It is not a real-time forecast and not a certified early-warning system.
 
 ## Data credit
 
@@ -12,7 +12,7 @@ Landslide inventory prepared by Mahesh Chathurange and W.G.N.N Jayawardhana (Res
 
 ## Status
 
-Steps 1–3 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation. Every non-trivial function in it is checked inline against synthetic data. Modeling, evaluation, and write-up are later milestones, not started.
+Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. Every non-trivial function is checked inline against synthetic data — Steps 4–5's model/metric code is verified the same way, since no real Sentinel-2/DEM imagery has been downloaded yet (Step 2's two download cells still need to be run manually with live CDSE credentials). See [docs/architecture.md](docs/architecture.md) for what's real vs. synthetic-verified-only.
 
 ## Setup
 
