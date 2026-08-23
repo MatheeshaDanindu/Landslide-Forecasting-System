@@ -34,7 +34,7 @@ No district/date/severity field exists anywhere in the source data (`docs/data_c
 
 Most terrain is flat; random negatives would be trivially separable by slope alone and would never test the model on genuinely ambiguous terrain. Density-proportional slope-bin stratification matches the *shape* of the positive slope distribution, not just its range. Hard negatives — drawn from immediately outside the exclusion buffer but inside a slightly larger ring — are adjacent to real failures (same rainfall event, same rough geomorphology) without overlapping them, forcing the model to learn real discriminative signal instead of "steep plus wet."
 
-**Scope limitation, stated explicitly:** stratification matches slope only, not aspect/elevation/land-cover jointly. A self-audit against a fuller terrain-matching checklist flagged this as a real reduction from the original plan, not an equivalent design. Slope is the single strongest, cheapest-to-compute discriminator available without a land-cover raster (which this project doesn't acquire), so it was kept as the one dimension actually implemented — adding the others is a documented future extension, not a silent omission.
+**Scope limitation, stated explicitly:** stratification matches slope only, not aspect/elevation/land-cover jointly — a real reduction from the original plan's fuller terrain-matching, not an equivalent design. Slope is the single strongest, cheapest-to-compute discriminator available without a land-cover raster (which this project doesn't acquire), so it was kept as the one dimension actually implemented — adding the others is a documented future extension, not a silent omission.
 
 ## Terrain features: slope, aspect, curvature — and why not more
 
