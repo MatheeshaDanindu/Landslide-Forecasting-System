@@ -1,0 +1,16 @@
+geopandas
+rasterio
+shapely
+pyproj
+fiona
+numpy
+pandas
+scipy
+scikit-learn
+pyyaml
+python-dotenv
+pytest
+openeo
+jupyter
+ipykernel
+matplotlib

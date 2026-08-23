@@ -30,6 +30,7 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 .pytest_cache/
+.venv/
 
 # OS
 .DS_Store
