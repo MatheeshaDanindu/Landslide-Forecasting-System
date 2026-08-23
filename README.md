@@ -4,7 +4,7 @@ Vision-based landslide susceptibility mapping for Sri Lanka, built on the ACCIMT
 
 ## Project framing
 
-This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and DEM-derived terrain (slope, aspect — TWI is a documented future addition, not yet implemented, see [docs/limitations.md](docs/limitations.md)). It is not a real-time forecast and not a certified early-warning system.
+This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and DEM-derived terrain (slope, aspect, curvature — TWI is a documented future addition, not yet implemented, see [docs/limitations.md](docs/limitations.md)). It is not a real-time forecast and not a certified early-warning system.
 
 ## Data credit
 
@@ -12,7 +12,7 @@ Landslide inventory prepared by Mahesh Chathurange and W.G.N.N Jayawardhana (Res
 
 ## Status
 
-Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. Every non-trivial function is checked inline against synthetic data — Steps 4–5's model/metric code is verified the same way, since no real Sentinel-2/DEM imagery has been downloaded yet (Step 2's two download cells still need to be run manually with live CDSE credentials). See [docs/architecture.md](docs/architecture.md) for what's real vs. synthetic-verified-only.
+Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. Sentinel-2 and DEM acquisition are proven against the live CDSE API at pilot scale; full-country-scale acquisition and real model training are next, intended to run in Colab. Everything downstream of real pixels is correctly implemented and self-checked against synthetic data pending that run. See [docs/report.md](docs/report.md) for the consolidated write-up (methodology, critical self-review, current status) or [docs/architecture.md](docs/architecture.md) for per-decision rationale.
 
 ## Setup
 
@@ -31,5 +31,5 @@ Then open `notebooks/landslide_pipeline.ipynb` with that environment as the kern
 
 - `notebooks/landslide_pipeline.ipynb` — the pipeline: configuration, label loading, acquisition, preprocessing, sample generation, spatial cross-validation (Steps 1–3)
 - `configs/` — YAML configuration read by the notebook (AOI, dates, bands, patch size, CV settings)
-- `docs/` — data card, limitations, architecture notes
+- `docs/` — data card, limitations, architecture notes, literature survey, ablation study design, consolidated report
 - `data/` — gitignored; see `data/README.md` to regenerate locally
