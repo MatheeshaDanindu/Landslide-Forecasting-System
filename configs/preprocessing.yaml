@@ -1,7 +1,7 @@
 reflectance_scale: 0.0001  # Sentinel-2 L2A digital numbers -> physical reflectance [0, 1]
 
 cloud_mask:
-  scl_exclude: [3, 7, 8, 9, 10]  # cloud shadow, cloud low/med/high probability, cirrus
+  scl_exclude: [3, 7, 8, 9, 10]  # cloud shadow, unclassified, cloud med/high probability, cirrus
 
 patch:
   size_px: 256
