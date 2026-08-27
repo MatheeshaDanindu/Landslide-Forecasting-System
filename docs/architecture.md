@@ -10,6 +10,10 @@ The ACCIMT inventory is a post-event damage-mapping dataset by its own stated pu
 
 The source labels are WGS84 geographic (EPSG:4326); all patch sizing, buffer distances, and slope/aspect math need real meters, not degrees. Both `download_sentinel2` and `download_dem` call `resample_spatial` to force this CRS at the source — Copernicus DEM in particular is natively EPSG:4326, so skipping this step would silently corrupt every downstream metric-grid assumption.
 
+## Why a 30-day pre-event search window, not 90
+
+A shorter lookback keeps imagery closer to the actual event, reducing land-cover/vegetation drift versus a longer window — a freshness argument, not just a speed one. Real tradeoff, stated rather than hidden: fewer candidate dates means less redundancy against cloud gaps, so some sub-areas could in principle return zero qualifying scenes where a longer window would have found one. Each acquisition run confirms at least one date per AOI tile before proceeding.
+
 ## Why an 8-10 band subset, not all 13
 
 Per the assignment guidance doc's cited Sequential Forward Floating Selection research: a compact visible + red-edge + NIR + SWIR subset matches or beats a full 13-band input while avoiding the Hughes phenomenon (curse of dimensionality from highly correlated bands).

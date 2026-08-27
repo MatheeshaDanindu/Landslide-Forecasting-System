@@ -9,7 +9,7 @@ sentinel2:
   collection: SENTINEL2_L2A
   max_cloud_cover: 45  # CDSE filtering has no 'lt', so <= is used (accepts <=45%)
   pre_event_cutoff: "2025-11-28"  # exclusive upper bound
-  search_window_days: 90
+  search_window_days: 30  # shorter lookback = imagery closer to the event (less land-cover drift); also cuts qualifying dates ~15->~3 per tile at the 45% cloud threshold
   bands: [B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12, SCL]
 
 dem:
@@ -20,6 +20,20 @@ target_crs: "EPSG:32644"     # UTM 44N
 target_resolution_m: 10
 
 output_dir: raw  # relative to DATA_DIR, not repo root
+
+# Full-AOI batch job OOM'd the backend (repeated executor JVM OOM). Split
+# into a grid of smaller jobs instead; raise if a tile still OOMs.
+tile_grid:
+  n_lon: 2
+  n_lat: 2
+
+# REQUIRES VERIFICATION against CDSE's actual supported job_options keys --
+# these are standard openeo-geotrellis conventions, not confirmed for CDSE.
+batch_job_options:
+  executor-memory: "4G"
+  executor-memoryOverhead: "2G"
+  driver-memory: "4G"
+  driver-memoryOverhead: "2G"
 
 labels:
   path: raw/labels/Lanslides_Ditwah_2025.shp
