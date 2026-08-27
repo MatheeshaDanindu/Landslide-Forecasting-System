@@ -45,3 +45,5 @@ See the notebook's own Step 6 table for the authoritative, per-component breakdo
 ## 6. Credit and disclaimer
 
 Per ACCIMT's data terms (verbatim in `docs/data_card.md`): research/academic/planning use only, no guarantee of accuracy, independent verification required before operational or legal use, and ACCIMT must be credited in any derived output. This project is a course assignment, not an operational hazard-warning system — see `docs/limitations.md` for the full scope of what this model does not and cannot do.
+
+Satellite data: contains modified Copernicus Sentinel-2 and Copernicus DEM data, accessed via the Copernicus Data Space Ecosystem (CDSE) `openeo` API — service credit, not a claim of endorsement by ESA/CDSE.

@@ -8,7 +8,11 @@ aoi:
 
 sentinel2:
   collection: SENTINEL2_L2A
-  max_cloud_cover: 20             # percent; stricter values may leave AOI gaps given post-cyclone cloud cover
+  max_cloud_cover: 45             # percent, exclusive: scenes with eo:cloud_cover >= 45 are rejected. 20 was too
+                                   # strict for a tropical/post-cyclone AOI and filtered out most available
+                                   # Sentinel-2 passes -- raised to 45. Per-pixel SCL cloud/shadow masking (see
+                                   # preprocessing) still applies downstream, so this scene-level threshold does
+                                   # not let cloud-contaminated pixels into training patches.
   pre_event_cutoff: "2025-11-28"  # exclusive upper bound — see notebooks/landslide_pipeline.ipynb Step 2
   search_window_days: 90          # how far back from the cutoff to search for a clean scene
   bands: [B02, B03, B04, B05, B06, B07, B08, B8A, B11, B12, SCL]

@@ -6,9 +6,11 @@ Vision-based landslide susceptibility mapping for Sri Lanka, built on the ACCIMT
 
 This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and DEM-derived terrain (slope, aspect, curvature — TWI is a documented future addition, not yet implemented, see [docs/limitations.md](docs/limitations.md)). It is not a real-time forecast and not a certified early-warning system.
 
-## Data credit
+## Data & service credit
 
 Landslide inventory prepared by Mahesh Chathurange and W.G.N.N Jayawardhana (Research Scientists, Space Applications Division) on behalf of the **Arthur C. Clarke Institute for Modern Technologies (ACCIMT)**. Full dataset description, disclaimer, and usage terms: [docs/data_card.md](docs/data_card.md).
+
+Satellite imagery: Copernicus Sentinel-2 L2A and Copernicus DEM (GLO-30), accessed via the **Copernicus Data Space Ecosystem (CDSE)** through its `openeo` Python client. Contains modified Copernicus Sentinel data, processed by ESA/CDSE.
 
 ## Status
 
