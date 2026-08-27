@@ -1,7 +1,4 @@
-# Two architectures per the locked project plan: a baseline and one attention
-# comparison model. Everything beyond these two (transformers, Siamese
-# change-detection, SAR fusion) is literature-review/discussion scope, not
-# implementation scope, for this pass.
+# Two architectures: baseline + one comparison model.
 baseline:
   arch: Unet
   encoder: resnet34
