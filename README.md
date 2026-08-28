@@ -14,7 +14,7 @@ Satellite imagery: Copernicus Sentinel-2 L2A and Copernicus DEM (GLO-30), access
 
 ## Status
 
-Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. Sentinel-2 and DEM acquisition are proven against the live CDSE API at pilot scale; full-country-scale acquisition and real model training are next, intended to run in Colab. Everything downstream of real pixels is correctly implemented and self-checked against synthetic data pending that run. See [docs/report.md](docs/report.md) for the consolidated write-up (methodology, critical self-review, current status) or [docs/architecture.md](docs/architecture.md) for per-decision rationale.
+Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. The notebook's own Step 6 status table is the authoritative, per-component real-vs-synthetic breakdown — acquisition, dataset assembly, and training move independently, not as one all-or-nothing milestone. See [docs/report.md](docs/report.md) for the consolidated write-up (methodology, critical self-review, current status) or [docs/architecture.md](docs/architecture.md) for per-decision rationale.
 
 ## Setup
 

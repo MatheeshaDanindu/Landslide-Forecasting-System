@@ -33,11 +33,11 @@ The project's own review framework asks a small number of hard questions that an
 
 ## 4. Honest status: what's real vs. what's implemented-but-unverified
 
-See the notebook's own Step 6 table for the authoritative, per-component breakdown. Summary: label loading, spatial clustering/CV, and the label-geometry EDA are verified against the real 4,225-polygon shapefile. Sentinel-2 and DEM acquisition are now proven against the live CDSE API at small (pilot-AOI) scale — not yet at full country scale. Everything downstream of real pixels (preprocessing, sampling, modeling, evaluation) is correctly implemented and self-checked against synthetic fixtures, pending the full-scale acquisition and training run.
+See the notebook's own Step 6 table for the authoritative, per-component breakdown — acquisition, dataset assembly, and training are tracked independently there since they don't all reach "real" status at once. Summary: label loading, spatial clustering/CV, and the label-geometry EDA are verified against the real 4,225-polygon shapefile; Sentinel-2/DEM acquisition (full-AOI, tiled) and real dataset assembly have been run against live downloaded imagery; the real (non-smoke-test) training run is still pending a clean end-to-end dataset-assembly pass.
 
 ## 5. Known gaps, stated rather than hidden
 
-- Full-country-scale Sentinel-2/DEM acquisition and a real (non-smoke-test) training run — both intended to run in Colab for GPU/Drive capacity, not yet executed.
+- A real (non-smoke-test) training run on the full assembled dataset — full-AOI acquisition and dataset assembly are implemented and have been run against live data; the training run itself is still pending, intended to run in Colab for GPU/Drive capacity.
 - The pre-event-vs-post-event counterfactual ablation (`docs/ablation_study.md`) — designed, not yet run.
 - Real error analysis (confusable terrain: bare soil, roads, shadow) — needs real predictions to inspect.
 - `docs/literature_survey.md` is a grounding survey, not an exhaustive systematic review.

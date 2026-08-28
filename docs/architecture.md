@@ -62,7 +62,7 @@ U-Net (baseline) and DeepLabV3+ (attention/multi-scale comparison), both via `se
 
 ## What's real vs. synthetic-verified-only
 
-See the notebook's own Step 6 status table. In short: label loading, the label-geometry EDA (minor-axis/area histograms, cluster-balance check), and spatial clustering/CV are verified against the real 4,225-polygon shapefile; everything downstream of actual pixel data (acquisition, preprocessing, sampling, modeling, evaluation, per-cluster metric aggregation) is correctly implemented and self-checked against synthetic fixtures only, because no real Sentinel-2/DEM imagery has been downloaded yet.
+See the notebook's own Step 6 status table for the current per-component breakdown — it changes independently per component, so it isn't repeated in full here.
 
 ## Model comparison: why U-Net + DeepLabV3+ beat the alternatives for this task
 
