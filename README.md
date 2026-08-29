@@ -1,37 +1,45 @@
 # Landslide Forecasting System
 
-Vision-based landslide susceptibility mapping for Sri Lanka, built on the ACCIMT Cyclone Ditwah (Nov 2025) landslide inventory.
-
-## Project framing
-
-This project predicts landslide **susceptibility** from pre-event Sentinel-2 imagery and DEM-derived terrain (slope, aspect, curvature — TWI is a documented future addition, not yet implemented, see [docs/limitations.md](docs/limitations.md)). It is not a real-time forecast and not a certified early-warning system.
+Vision-based landslide **susceptibility** mapping for Sri Lanka, built on the ACCIMT Cyclone Ditwah (Nov 2025) landslide inventory. Predicts susceptibility from pre-event Sentinel-2 imagery + DEM terrain — not a real-time forecast, not a certified early-warning system.
 
 ## Data & service credit
 
-Landslide inventory prepared by Mahesh Chathurange and W.G.N.N Jayawardhana (Research Scientists, Space Applications Division) on behalf of the **Arthur C. Clarke Institute for Modern Technologies (ACCIMT)**. Full dataset description, disclaimer, and usage terms: [docs/data_card.md](docs/data_card.md).
+- Landslide inventory: Mahesh Chathurange & W.G.N.N Jayawardhana (ACCIMT), Cyclone Ditwah post-event mapping. 4,225 polygons, WGS84, reprojected to UTM 44N (EPSG:32644) for this project.
+- ACCIMT disclaimer: research/academic/planning use only; no accuracy guarantee; independent verification required before operational/legal/commercial use; credit ACCIMT in any derived output.
+- Satellite data: Copernicus Sentinel-2 L2A + Copernicus DEM (GLO-30) via the Copernicus Data Space Ecosystem (CDSE) `openeo` client. Contains modified Copernicus Sentinel data, processed by ESA/CDSE.
 
-Satellite imagery: Copernicus Sentinel-2 L2A and Copernicus DEM (GLO-30), accessed via the **Copernicus Data Space Ecosystem (CDSE)** through its `openeo` Python client. Contains modified Copernicus Sentinel data, processed by ESA/CDSE.
+## Limitations
+
+- Static susceptibility only — no subsurface hydrology, pore-water pressure, rainfall, or real-time monitoring (see NBRO for Sri Lanka's operational early-warning system).
+- Post-event labels, pre-event-only inputs — mechanically enforced (`verify_pre_event_dates`), not just assumed, so the model can't just re-detect a scar's own visible signature.
+- Single storm, single region — spatial CV measures generalization to unseen *locations* in this extent, not to a different storm/season/region.
+- Minimum mappable unit 30m — smaller polygons (16% of the dataset) are excluded from the primary mask, reported as a separate small-object cohort instead of dropped or blended in.
 
 ## Status
 
-Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): configuration & label loading, data acquisition & preprocessing, sample generation & spatial cross-validation, modeling, evaluation, and write-up notes. The notebook's own Step 6 status table is the authoritative, per-component real-vs-synthetic breakdown — acquisition, dataset assembly, and training move independently, not as one all-or-nothing milestone. See [docs/report.md](docs/report.md) for the consolidated write-up (methodology, critical self-review, current status) or [docs/architecture.md](docs/architecture.md) for per-decision rationale.
+Steps 1–6 implemented in [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb): config/labels, acquisition/preprocessing, sampling/spatial-CV, modeling, evaluation (incl. held-out spatial CV, confusion matrix, ROC-AUC), write-up notes. The notebook's own Step 6 table is the per-component real-vs-synthetic status. See [docs/architecture.md](docs/architecture.md) for design rationale.
 
 ## Setup
 
-**Colab (recommended — for compute):** open [`notebooks/landslide_pipeline.ipynb`](notebooks/landslide_pipeline.ipynb) in Colab (File > Open notebook > GitHub, this repo). The first cell mounts Drive, clones the repo, and installs dependencies. Add `CDSE_CLIENT_ID` / `CDSE_CLIENT_SECRET` under Colab's Secrets (key icon) before running the acquisition cells.
+**Colab (recommended — for GPU):** open the notebook via File > Open notebook > GitHub. First cell mounts Drive, clones the repo, installs deps. Add `CDSE_CLIENT_ID` / `CDSE_CLIENT_SECRET` (and optionally `HF_TOKEN`) under Colab Secrets before running acquisition cells.
 
 **Local:**
 ```
 python -m venv .venv
-.venv\Scripts\activate       # Windows; use `source .venv/bin/activate` on Linux/Mac
+.venv\Scripts\activate       # Windows; source .venv/bin/activate on Linux/Mac
 pip install -r requirements.txt
-cp .env.example .env         # fill in Copernicus Data Space Ecosystem credentials
+cp .env.example .env         # fill in CDSE credentials
 ```
-Then open `notebooks/landslide_pipeline.ipynb` with that environment as the kernel.
+
+**Data setup** (gitignored, not redistributed here):
+- Labels: copy the ACCIMT shapefile set (`.shp .shx .dbf .prj .cpg`) to `data/raw/labels/Lanslides_Ditwah_2025.shp`.
+- Sentinel-2/DEM: run Step 2's acquisition cells once credentials are set — populates `data/raw/sentinel2/` and `data/raw/dem/`. AOI/date/band/cloud settings live in `configs/acquisition.yaml`.
+- Processed patches/manifest are derived — regenerating from `raw/` is always safe.
 
 ## Repository layout
 
-- `notebooks/landslide_pipeline.ipynb` — the pipeline: configuration, label loading, acquisition, preprocessing, sample generation, spatial cross-validation (Steps 1–3)
-- `configs/` — YAML configuration read by the notebook (AOI, dates, bands, patch size, CV settings)
-- `docs/` — data card, limitations, architecture notes, literature survey, ablation study design, consolidated report
-- `data/` — gitignored; see `data/README.md` to regenerate locally
+- `notebooks/landslide_pipeline.ipynb` — the pipeline, all steps
+- `configs/` — YAML config (AOI, dates, bands, patch size, CV, model, training)
+- `docs/architecture.md` — design rationale, model architecture, model comparison
+- `data/` — gitignored; see Setup above to regenerate
+- `models/` — gitignored trained checkpoints

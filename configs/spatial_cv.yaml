@@ -1,14 +1,12 @@
-random_seed: 42          # numpy + torch — every stochastic step in the pipeline seeds from this one value
+random_seed: 42          # numpy + torch, single seed for the whole pipeline
 
 clustering:
-  n_clusters: 8           # K-Means over polygon centroids; no district/date field exists in the source data (docs/data_card.md)
+  n_clusters: 8           # K-Means over polygon centroids; no district/date field exists in the source data
 
-buffer_m: 1800            # patch half-width (256px/2 * 10m = 1280m) + 500m correlation margin, rounded up --
-                          # must stay >= patch half-width or train/test patch footprints can still touch even
-                          # when label polygons don't (buffered_cluster_folds asserts this at runtime)
+buffer_m: 1800            # patch half-width (1280m) + 500m correlation margin -- must stay >= patch half-width
 
 negative_sampling:
-  exclusion_buffer_m: 40   # keep-out ring around every positive polygon before drawing negatives
-  hard_negative_ring_m: 150  # hard negatives drawn between exclusion_buffer_m and this radius (adjacent-but-stable slopes)
+  exclusion_buffer_m: 40    # keep-out ring around every positive polygon
+  hard_negative_ring_m: 150 # hard negatives drawn between exclusion_buffer_m and this radius
   slope_bins: 5
   n_per_bin: 20

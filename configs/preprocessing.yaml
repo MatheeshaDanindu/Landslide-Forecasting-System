@@ -1,15 +1,15 @@
-reflectance_scale: 0.0001  # Sentinel-2 L2A digital numbers -> physical reflectance [0, 1]
+reflectance_scale: 0.0001  # Sentinel-2 L2A DN -> reflectance [0, 1]
 
 cloud_mask:
-  scl_exclude: [3, 7, 8, 9, 10]  # cloud shadow, unclassified, cloud med/high probability, cirrus
+  scl_exclude: [3, 7, 8, 9, 10]  # cloud shadow, unclassified, cloud med/high prob, cirrus
 
 patch:
   size_px: 256
   stride_px: 128
-  resolution_m: 10  # see docs/data_card.md size-distribution analysis for why 256x256@10m
+  resolution_m: 10  # 256px@10m covers the p99 landslide polygon with context
 
 labels:
-  min_minor_axis_m: 30  # below this: small-object eval cohort, not the training mask (docs/limitations.md)
+  min_minor_axis_m: 30  # below this: small-object eval cohort, not the training mask
 
 crs:
   metric: "EPSG:32644"     # UTM 44N
