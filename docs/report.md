@@ -16,8 +16,8 @@ Six-step pipeline, implemented end-to-end in `notebooks/landslide_pipeline.ipynb
 2. **Data acquisition & preprocessing** — Sentinel-2 (pre-event, CRS-forced) + Copernicus DEM via CDSE openEO; SCL-based cloud/shadow masking; NDVI/BSI/MNDWI spectral indices; slope/aspect/curvature terrain; label rasterization respecting a documented minimum mappable unit; patch tiling and extraction.
 3. **Sample generation & spatial CV** — K-Means spatial clustering + buffered cluster folds (never random k-fold); slope-stratified density-proportional negative sampling plus adjacency-ring hard negatives; a persisted provenance manifest making pre-event compliance independently auditable.
 4. **Modeling** — U-Net (baseline) and DeepLabV3+ (comparison), both via `segmentation_models_pytorch` on the same 16-channel input stack; Focal+Dice hybrid loss matched to a measured ~0.05% positive-pixel imbalance.
-5. **Evaluation** — Precision/Recall/F1/mIoU (never accuracy) plus a categorical error map and per-cluster metric aggregation, so cross-cluster variance is visible, not averaged away.
-6. **Write-up** — this document, `docs/literature_survey.md`, `docs/ablation_study.md`, and the notebook's own real-vs-synthetic status table.
+5. **Evaluation** — Precision/Recall/F1/mIoU/ROC-AUC plus the pooled confusion matrix (never accuracy), a categorical error map, and genuine held-out spatial cross-validation (`run_spatial_cv`, 5.5): one model trained per cluster, evaluated only on its own held-out cluster, so reported metrics are never train-and-predict-on-the-same-data.
+6. **Write-up** — this document, `docs/literature_survey.md`, `docs/ablation_study.md`, `docs/ai_usage.md`, and the notebook's own real-vs-synthetic status table.
 
 See `docs/literature_survey.md` for how this design compares against real, currently-published prior work (Landslide4Sense, comparative U-Net/DeepLabV3+ studies, spatial-CV leakage literature).
 
@@ -33,14 +33,15 @@ The project's own review framework asks a small number of hard questions that an
 
 ## 4. Honest status: what's real vs. what's implemented-but-unverified
 
-See the notebook's own Step 6 table for the authoritative, per-component breakdown — acquisition, dataset assembly, and training are tracked independently there since they don't all reach "real" status at once. Summary: label loading, spatial clustering/CV, and the label-geometry EDA are verified against the real 4,225-polygon shapefile; Sentinel-2/DEM acquisition (full-AOI, tiled) and real dataset assembly have been run against live downloaded imagery; the real (non-smoke-test) training run is still pending a clean end-to-end dataset-assembly pass.
+See the notebook's own Step 6 table for the authoritative, per-component breakdown — acquisition, dataset assembly, and training are tracked independently there since they don't all reach "real" status at once. Summary: label loading, spatial clustering/CV, and the label-geometry EDA are verified against the real 4,225-polygon shapefile; Sentinel-2/DEM acquisition (full-AOI, tiled), real dataset assembly, and a real (non-smoke-test) training run have all been executed against live downloaded imagery, with the trained model persisted to `models/baseline_unet.pt`. That first real run used the pipeline's earlier 1-epoch placeholder config and, as expected at that setting, mostly failed to detect real positives — `epochs` is now `20` (`configs/model.yaml`) and the genuine held-out evaluation (`run_spatial_cv`, 5.5) is implemented and self-checked; a real run of both at the corrected config is the next concrete step, not yet executed against live data.
 
 ## 5. Known gaps, stated rather than hidden
 
-- A real (non-smoke-test) training run on the full assembled dataset — full-AOI acquisition and dataset assembly are implemented and have been run against live data; the training run itself is still pending, intended to run in Colab for GPU/Drive capacity.
+- A real training run at the corrected config (`epochs: 20`, not the 1-epoch placeholder the first real run used) and a real run of `run_spatial_cv`'s held-out evaluation against live data — both implemented and self-checked, neither yet executed against the full real dataset.
 - The pre-event-vs-post-event counterfactual ablation (`docs/ablation_study.md`) — designed, not yet run.
 - Real error analysis (confusable terrain: bare soil, roads, shadow) — needs real predictions to inspect.
 - `docs/literature_survey.md` is a grounding survey, not an exhaustive systematic review.
+- The provenance manifest (`data/processed/manifest.csv`) does not yet cover every field the assignment's Stage 3 requires (sample id, coordinates, class label, image dimensions, spatial resolution, cloud info, preprocessing ops) — only product id, sensing date, cluster, and positive/negative flag today.
 
 ## 6. Credit and disclaimer
 

@@ -18,6 +18,6 @@ loss:
 
 training:
   batch_size: 8
-  epochs: 1            # placeholder for the synthetic smoke-test; raise once real data exists
+  epochs: 30           # real training value -- 1 was a smoke-test placeholder; see docs/report.md
   learning_rate: 0.0003
   random_seed: 42
