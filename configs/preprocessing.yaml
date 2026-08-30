@@ -4,9 +4,9 @@ cloud_mask:
   scl_exclude: [3, 7, 8, 9, 10]  # cloud shadow, unclassified, cloud med/high prob, cirrus
 
 patch:
-  size_px: 256
+  size_px: 128  # was 256 -- traded p99-landslide context margin for ~4x less compute/patch, see chat
   stride_px: 128
-  resolution_m: 10  # 256px@10m covers the p99 landslide polygon with context
+  resolution_m: 10
 
 labels:
   min_minor_axis_m: 30  # below this: small-object eval cohort, not the training mask

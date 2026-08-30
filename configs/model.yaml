@@ -17,7 +17,7 @@ loss:
   dice_weight: 0.5    # final loss = (1 - dice_weight) * focal + dice_weight * dice
 
 training:
-  batch_size: 8
-  epochs: 7
-  learning_rate: 0.0003
+  batch_size: 5
+  epochs: 5
+  learning_rate: 0.0005
   random_seed: 42
