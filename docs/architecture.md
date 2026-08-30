@@ -8,7 +8,7 @@ Design rationale for `notebooks/landslide_pipeline.ipynb`, kept short — one li
 - **30-day pre-event search window.** Shorter lookback = imagery closer to the event, less vegetation drift. Tradeoff: less redundancy against cloud gaps.
 - **8-10 band subset, not all 13.** Visible + red-edge + NIR + SWIR avoids the Hughes phenomenon (SFFS research, assignment guidance doc).
 - **256x256 @ 10m patches, stride 128.** Covers the p99 polygon (917m) with context; derived from the real size distribution, not assumed.
-- **30m minimum mappable unit.** 16% of polygons are under this (near/below Sentinel-2 resolution, and the source shapefile's own 20m PAEK smoothing tolerance). Excluded from the primary mask, tracked as a separate small-object cohort.
+- **30m minimum mappable unit.** 31% of polygons are under this by true oriented minor axis (near/below Sentinel-2 resolution, and the source shapefile's own 20m PAEK smoothing tolerance). Excluded from the primary mask, tracked as a separate small-object cohort.
 - **`all_touched=True` rasterization.** Default (pixel-center-only) can drop a sub-pixel polygon entirely.
 - **Clustered + buffered spatial CV, never random k-fold.** No district/date field exists in the source data, so clusters are K-Means on centroids. Random k-fold leaks via spatial autocorrelation.
 - **Slope-stratified + hard negatives, not random.** Random negatives are trivially separable by slope alone. Scope reduction: slope only, not aspect/elevation/land-cover jointly.
