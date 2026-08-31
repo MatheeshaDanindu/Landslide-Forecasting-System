@@ -50,6 +50,15 @@ cp .env.example .env         # fill in CDSE credentials
 **Data setup** (gitignored, not redistributed here):
 - Labels: copy the ACCIMT shapefile set (`.shp .shx .dbf .prj .cpg`) to `data/raw/labels/Lanslides_Ditwah_2025.shp`.
 - Sentinel-2/DEM: run Step 2's acquisition cells once credentials are set — populates `data/raw/sentinel2/` and `data/raw/dem/`. AOI/date/band/cloud settings live in `configs/acquisition.yaml`.
+
+**Web demo** (`web/`, optional, Stage 6): loads a trained checkpoint from `Trained Model/` and serves a
+local page to run it on a procedurally-generated 16-channel patch (no live satellite fetch — none of
+the real Sentinel-2/DEM tiles exist outside Colab/Drive). A mechanism demo of the trained model, not a
+real-location prediction.
+```
+pip install -r web/requirements.txt
+python web/app.py     # http://127.0.0.1:5000
+```
 - Processed patches/manifest are derived — regenerating from `raw/` is always safe.
 
 ## Repository layout
