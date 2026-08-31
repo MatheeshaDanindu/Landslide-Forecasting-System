@@ -17,7 +17,10 @@ loss:
   dice_weight: 0.5    # final loss = (1 - dice_weight) * focal + dice_weight * dice
 
 training:
-  batch_size: 5
+  # batch_size 5 at 64x64 leaves the GPU mostly idle between steps. 32 is still
+  # small in memory terms (32 x 16 x 64 x 64) and cuts the number of optimiser
+  # steps per epoch by more than six times.
+  batch_size: 32
   epochs: 5
   learning_rate: 0.0003
   random_seed: 42
