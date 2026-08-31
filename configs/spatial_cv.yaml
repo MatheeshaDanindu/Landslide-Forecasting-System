@@ -3,8 +3,9 @@ random_seed: 42          # numpy + torch, single seed for the whole pipeline
 clustering:
   n_clusters: 8           # K-Means over polygon centroids; no district/date field exists in the source data
 
-buffer_m: 3060            # patch full width (2560m, both sides extend a half-width toward each
-                          # other) + 500m correlation margin -- must stay >= 2x patch half-width
+buffer_m: 3060            # sized for the original 256px patch (2560m full width + 500m margin);
+                          # current 64px patch only requires >=640m -- this is now a conservative
+                          # margin, not a tight one. Must stay >= 2x patch half-width, always.
 
 negative_sampling:
   exclusion_buffer_m: 40    # keep-out ring around every positive polygon
