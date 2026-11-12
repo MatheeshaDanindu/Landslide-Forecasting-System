@@ -13,10 +13,15 @@ from flask import Flask, jsonify, render_template_string, request
 from model_utils import SCENARIOS, load_checkpoint, make_demo_patch, make_patch_from_image, predict
 
 app = Flask(__name__)
-MODELS = {
-    "baseline": load_checkpoint("baseline", "baseline_unet.pt"),
-    "comparison": load_checkpoint("comparison", "fold_cluster0_comparison.pt"),
-}
+MODELS = {}
+for model_key, filename in {
+    "baseline": "baseline_unet.pt",
+    "comparison": "fold_cluster0_comparison.pt",
+}.items():
+    try:
+        MODELS[model_key] = load_checkpoint(model_key, filename)
+    except FileNotFoundError:
+        MODELS[model_key] = None
 
 PAGE = """
 <!doctype html><html><head><meta charset="utf-8">
@@ -113,7 +118,16 @@ def index():
 
 
 def render_prediction(model_key, patch, rgb):
-    probs = predict(MODELS[model_key], patch)
+    model = MODELS.get(model_key)
+    if model is None:
+        return jsonify({
+            "error": (
+                f"Model '{model_key}' checkpoint is not available. Place the trained .pt file in "
+                "Trained Model/ before running the demo."
+            )
+        }), 503
+
+    probs = predict(model, patch)
     fig1, ax1 = plt.subplots(figsize=(3, 3))
     ax1.imshow(rgb); ax1.axis("off")
     fig2, ax2 = plt.subplots(figsize=(3, 3))

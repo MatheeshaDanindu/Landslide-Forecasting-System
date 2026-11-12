@@ -2,12 +2,13 @@
 web demo. No live satellite fetch here -- see README in this folder.
 """
 import io
+from pathlib import Path
 
 import numpy as np
 import torch
 import segmentation_models_pytorch as smp
 
-REPO_ROOT = __import__("pathlib").Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent
 CKPT_DIR = REPO_ROOT / "Trained Model"
 IN_CHANNELS = 16
 PATCH_SIZE = 64
@@ -24,8 +25,17 @@ def build_model(spec_key):
 
 
 def load_checkpoint(spec_key, filename):
+    checkpoint_path = CKPT_DIR / filename
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(
+            f"Model checkpoint '{checkpoint_path}' is missing. Train the model or place the .pt file in '{CKPT_DIR}'."
+        )
+
     model = build_model(spec_key)
-    state = torch.load(CKPT_DIR / filename, map_location=DEVICE, weights_only=True)
+    try:
+        state = torch.load(checkpoint_path, map_location=DEVICE, weights_only=True)
+    except TypeError:
+        state = torch.load(checkpoint_path, map_location=DEVICE)
     model.load_state_dict(state)
     model.eval()
     return model

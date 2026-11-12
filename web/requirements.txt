@@ -1,1 +1,6 @@
 flask
+numpy
+matplotlib
+torch
+segmentation-models-pytorch
+Pillow
