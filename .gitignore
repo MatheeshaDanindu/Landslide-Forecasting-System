@@ -30,6 +30,10 @@ models/*
 # Local experiment tracking
 mlruns/
 
+# Run logs -- regenerated every run, not meant to be versioned (the CSVs/JSON
+# under experiments/ that actually hold results are not excluded)
+experiments/**/*.log
+
 # Python
 __pycache__/
 *.pyc
