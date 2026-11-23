@@ -12,12 +12,18 @@ def load_yaml(path: str | Path) -> Dict[str, Any]:
 
 
 def load_project_config(repo_root: str | Path | None = None) -> Dict[str, Any]:
+    """Namespaced merge, one key per config file.
+
+    A flat `merged.update(data)` silently drops data: both acquisition.yaml
+    and preprocessing.yaml define a top-level `labels` key, so the second
+    load clobbers the first (losing `labels.path`) with no error -- it only
+    "worked" before because callers' hardcoded fallback happened to match
+    the real path. Namespacing makes collisions structurally impossible.
+    """
     root = Path(repo_root) if repo_root is not None else Path(__file__).resolve().parents[2]
     config_dir = root / "configs"
-    merged: Dict[str, Any] = {}
+    out: Dict[str, Any] = {}
     for name in ["acquisition.yaml", "preprocessing.yaml", "model.yaml", "spatial_cv.yaml"]:
-        data = load_yaml(config_dir / name)
-        if not data:
-            continue
-        merged.update(data)
-    return merged
+        key = name.removesuffix(".yaml")
+        out[key] = load_yaml(config_dir / name)
+    return out

@@ -15,13 +15,21 @@ from landslide_pipeline.labels import load_labels, record_label_summary
 
 def main() -> None:
     cfg = load_project_config(ROOT)
-    label_rel = cfg.get("labels", {}).get("path", "data/raw/labels/Lanslides_Ditwah_2025.shp")
-    label_path = ROOT / label_rel
+    label_rel = cfg["acquisition"]["labels"]["path"]
+    # labels.path is DATA_DIR-relative (DATA_DIR = ROOT/"data"), not ROOT-relative --
+    # see docs/architecture.md; this only ever worked before because the pre-fix
+    # config merge bug silently fell back to a hardcoded default that happened to
+    # include "data/".
+    label_path = ROOT / "data" / label_rel
     print(f"Repository root: {ROOT}")
     print(f"Config files loaded: {sorted(list((ROOT / 'configs').glob('*.yaml')))}")
     if label_path.exists():
-        labels = load_labels(label_path, cfg.get("crs", {}).get("metric", "EPSG:32644"))
-        print(f"Loaded labels: {record_label_summary(labels)}")
+        labels = load_labels(label_path, cfg["preprocessing"]["crs"]["metric"])
+        min_minor_axis_m = cfg["preprocessing"]["labels"]["min_minor_axis_m"]
+        summary = record_label_summary(labels)
+        summary["small_objects"] = int((labels["minor_axis_m"] < min_minor_axis_m).sum())
+        summary["small_share"] = float((labels["minor_axis_m"] < min_minor_axis_m).mean())
+        print(f"Loaded labels: {summary}")
     else:
         print(f"Label file missing: {label_path}")
     print("Pipeline configuration and scientific guardrails are ready for a real-data run.")

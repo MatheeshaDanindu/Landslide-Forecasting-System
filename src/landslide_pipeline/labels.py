@@ -8,8 +8,17 @@ import numpy as np
 
 
 def _oriented_minor_axis(geom):
+    # ponytail: geom.minimum_rotated_rectangle.length is the rectangle's full
+    # perimeter (2*(long+short)); /2 gives long+short, not the short side.
+    # Compute the two distinct edge lengths of the (5-point, closed) rect
+    # and take the smaller.
     try:
-        return geom.minimum_rotated_rectangle.length / 2.0
+        coords = list(geom.minimum_rotated_rectangle.exterior.coords)
+        edges = [
+            np.hypot(coords[i + 1][0] - coords[i][0], coords[i + 1][1] - coords[i][1])
+            for i in range(len(coords) - 1)
+        ]
+        return float(min(edges))
     except Exception:
         return np.nan
 

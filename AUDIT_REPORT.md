@@ -1,0 +1,48 @@
+# Audit Report — Landslide Forecasting System
+
+Verified against the live repository (this session), not assumed from the prior audit document.
+Status values: **CONFIRMED** (bug reproduced / verified in current code), **FIXED** (confirmed, then corrected in this pass),
+**NOT PRESENT** (described risk does not match current code), **DEFERRED** (confirmed or plausible, not fixed this pass — reason given).
+
+## Critical
+
+| # | Issue | Status | Evidence |
+|---|---|---|---|
+| 3 | Minor-axis calculation wrong | **FIXED** | `labels.py` used `minimum_rotated_rectangle.length / 2` = half-perimeter (long+short), not the short side. Verified by rerun: small-object cohort (<30m) changed from **85 (2.0%)** to **1,287 (30.5%)** after the fix — matching `docs/architecture.md`'s independently-stated "31% of polygons are under this by true oriented minor axis" (which used the notebook's already-correct formula). Fixed in `labels.py` to take `min()` of the rectangle's two distinct edge lengths. |
+| 4 | Cloud mask discarded before loss | **CONFIRMED in notebook, FIXED in new standalone pipeline** | Notebook cell at `LandslideDataset.__getitem__`: `x, _ = extract_patch(...)` — verified present via grep, line ~2133. New `src/landslide_pipeline/dataset.py::build_patch` returns `(stack, label, valid_mask)` and `train.py`/`evaluate.py` pass the mask into `focal_dice_loss`/`segmentation_metrics`. The notebook itself was **not** edited (100-cell notebook surgery was out of scope this pass); the standalone pipeline is the corrected path going forward. |
+| 8 | Eight-fold claim vs. one fold run | **CONFIRMED, PARTIALLY ADDRESSED** | `run_spatial_cv(..., max_folds=1)` confirmed in notebook cells 96/99. This session also only evaluated/retrained **fold 0**, for the same reason the original author hit: compute cost. Each tile is ~8,393×7,699 px; 8 folds × 2 architectures on CPU is realistically hours-to-a-day of wall time, not feasible in this session. **This report makes no 8-fold claim** — see EXPERIMENTAL_RESULTS.md, which reports fold 0 only and says so in every table. |
+| 9 | Random train/val split causes leakage | **CONFIRMED in notebook, FIXED in new pipeline** | Notebook `train_real()` uses `torch.utils.data.random_split` at the patch level. New `train.py` splits the **inner** validation set by `polygon_id` (grouped), so no polygon's patches appear on both sides; the buffered outer test cluster is untouched as before. |
+| 18 | Pre-event provenance not linked per sample | **NOT FIXED — scope cut** | `manifest_row()`/`verify_pre_event_dates()` exist in the notebook but no persisted per-sample manifest is written for the real run. Acquisition dates used (31 Oct, 2 Nov, 20 Nov 2025) are all confirmed < the 28 Nov 2025 cutoff by direct inspection of the downloaded filenames, so the *result reported here* is not post-event-contaminated, but a machine-checked manifest file per sample was not built this pass. |
+
+## High
+
+| # | Issue | Status | Evidence |
+|---|---|---|---|
+| 5 | SCL exclusion incomplete | **FIXED** | `configs/preprocessing.yaml` changed `[3,7,8,9,10]` → `[0,1,3,7,8,9,10,11]` (adds no-data, saturated/defective, snow/ice). |
+| 6 | Normalization not train-fold-only | **NOT PRESENT as stated / DEFERRED** | No global normalization statistics (mean/std z-scoring) are fitted anywhere in the current code — reflectance scaling is a fixed constant (1e-4), not a learned statistic, so there's no leakage channel there. Aspect sin/cos encoding and robust curvature scaling were **not** added (would change `input_channels` from 16→17 and invalidate both existing checkpoints' first conv layer — a deliberate, larger follow-up change, not done here). |
+| 7 | Patch sampling / imbalance | **PARTIALLY FIXED** | Provenance (`polygon_id` per patch) is now tracked through `train.py`/`evaluate.py`. Slope-stratified + hard-negative sampling from the notebook was **not** ported into the standalone pipeline this pass — `train.py` currently trains on positive-centred patches only (each patch still contains background pixels at pixel level, which is where the loss signal for negatives comes from, but there is no separate negative-centred patch set). Flagged as a deferred gap in FIXES_APPLIED.md. |
+| 11 | Threshold fixed at 0.5 | **NOT FIXED** | `evaluate.py` accepts `--threshold` as a CLI flag (so 0.5 is no longer hardcoded in source), but validation-selected threshold search was not wired in — no inner-validation probability store exists yet to select from. |
+| 12 | PR-AUC absent | **FIXED** | `metrics.py::average_precision` added, wired into `segmentation_metrics()`, reported alongside ROC-AUC and precision/recall/F1/IoU/specificity in every evaluation. |
+| 13 | Confidence intervals not tied to real folds | **NOT PRESENT above baseline** | Still true: only one fold is run, so a CI across folds is not meaningful. No fabricated CI is reported anywhere in this pass's outputs. |
+| 14 | Focal-Dice lacks masking | **FIXED** | `training.py::focal_loss/dice_loss/focal_dice_loss` now accept `valid_mask` and compute `sum(mask*loss)/sum(mask)`, matching the masked-loss principle in the audit spec exactly. No independent `pos_weight` was added (alpha already serves this role; a second free parameter was judged not worth the added config surface for one fold's worth of data). |
+| 15 | Training setup limited | **PARTIALLY FIXED** | `train.py` adds early stopping (configurable patience), best-checkpoint-by-val-loss saving (not just last epoch), and an epoch-wise CSV history log. No LR scheduler and no data augmentation were added (deliberate scope cut — see FIXES_APPLIED.md). |
+| 16 | Classical baseline not comparable | **NOT FIXED** | A fair pixel-wise Random Forest baseline (same folds/features/masks) was not built this pass. Significant additional engineering (tabular feature extraction at the same per-pixel grain) — scoped out. |
+| 20 | DEM nodata → false zero terrain | **NOT FIXED** | Confirmed present only in the notebook's `load_dem_aligned()` (not in the standalone pipeline, which reads each DEM tile directly per-window without a separate reprojection step, so the specific zero-init-destination-array bug described does not apply to `dataset.py::build_patch` — but DEM nodata pixels are still not explicitly masked there either). Flagged as an open risk. |
+| 21 | Config merge overwrites keys | **FIXED** | `config.py::load_project_config` now returns a namespaced dict (`cfg["acquisition"]`, `cfg["preprocessing"]`, etc.) instead of a flat `merged.update(data)`. Verified the bug was real and live: `acquisition.yaml` and `preprocessing.yaml` both define a top-level `labels` key; the second load silently discarded `labels.path` from the first. The only reason the old code "worked" is that `scripts/check_pipeline.py`'s hardcoded fallback string happened to equal the correct value — confirmed by tracing the actual call. |
+| 22 | Dataset path checks don't fail fast | **FIXED for the specific case found; CONFIRMED a second, related bug** | `check_pipeline.py` now resolves the label path under `DATA_DIR` (`ROOT/"data"`), not `ROOT` — the acquisition config's `labels.path` is documented as DATA_DIR-relative (see `docs/architecture.md`'s `DATA_DIR` note) but the Sentinel-2/DEM raw tiles are inconsistently placed directly under `ROOT/"raw"`, not `ROOT/"data"/"raw"`. This inconsistency is now called out explicitly in code comments in `train.py`/`evaluate.py` rather than silently worked around. |
+
+## Medium
+
+| # | Issue | Status | Evidence |
+|---|---|---|---|
+| 1 | No standalone pipeline | **FIXED** | Added `src/landslide_pipeline/{dataset,models,train,evaluate}.py` — real, runnable, config-driven entry points (`python -m landslide_pipeline.train --fold 0 --model-key baseline`, `python -m landslide_pipeline.evaluate --fold 0 --model-key baseline`). The notebook itself was not converted to import these modules (that would require a notebook-wide rewrite out of scope here); it remains a second, divergent path. |
+| 2 | Duplicated implementations | **PARTIALLY ADDRESSED** | `models.py` reuses `training.build_model`'s pattern rather than reimplementing it (new code doesn't duplicate). The pre-existing notebook-vs-package duplication (features, labels, curvature) was **not** reconciled — would require editing the 100-cell notebook, out of scope this pass. |
+| 17 | Small-object cohort not evaluated | **NOT FIXED** | `build_patch`/`rasterize_polygons` still only rasterize the primary (≥30m) cohort; no secondary small-object recall report was built. More material now than before, given the corrected 30.5% small-object share. |
+| 23 | Checkpoint path inconsistency | **NOT FIXED, but newly-written checkpoints use one consistent root** | `train.py` writes to `experiments/corrected_experiment_v1/checkpoints/`; the pre-existing `models/baseline_unet.pt` vs `Trained Model/` split from the original notebook/web-demo was left as-is (the web demo was not touched this pass). |
+| 24 | Seeding incomplete | **FIXED** | `training.py::seed_everything` now also seeds Python's `random`; added `worker_init_fn` for DataLoader workers. CUDA/cuDNN determinism flags were not added (no GPU was used to test this pass). |
+
+## Not independently re-verified this pass (carried over from the prior audit document, not re-checked against source)
+
+Issues 10 (overlapping patches/pseudo-replication), 19 (acquisition window day-count inconsistency) were not re-traced
+line-by-line this session. Nothing found elsewhere contradicts the prior audit's characterization of them, but "not
+contradicted" is not the same as "confirmed" — treat them as open until someone re-checks the exact cells referenced.
