@@ -5,9 +5,9 @@
   "encoder": "resnet34",
   "in_channels": 16,
   "n_fit_patches": 2335,
-  "n_val_patches": 410,
+  "n_val_patches": 411,
   "n_test_patches": 460,
-  "best_val_loss": 0.4411004994596754,
+  "best_val_loss": 0.43351225342069355,
   "epochs_run": 5,
-  "selected_threshold": 0.6000000000000001
+  "selected_threshold": 0.45
 }
