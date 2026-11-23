@@ -137,7 +137,11 @@ def train_one_model(cfg, fold: int, model_key: str, fit_patches, val_patches, te
     epochs = epochs or model_cfg["training"]["epochs"]
     batch_size = model_cfg["training"]["batch_size"]
 
-    fit_loader = torch.utils.data.DataLoader(PatchDataset(fit_patches), batch_size=batch_size, shuffle=True)
+    # drop_last: a size-1 final batch crashes BatchNorm in train() mode (DeepLabV3+'s
+    # ASPP global-pooling branch collapses to (1, C, 1, 1), which batch_norm rejects
+    # outright) -- hit in practice on a fold whose patch count % batch_size == 1.
+    fit_loader = torch.utils.data.DataLoader(PatchDataset(fit_patches), batch_size=batch_size,
+                                              shuffle=True, drop_last=True)
     val_loader = torch.utils.data.DataLoader(PatchDataset(val_patches), batch_size=batch_size) if val_patches else None
 
     CHECKPOINT_ROOT.mkdir(parents=True, exist_ok=True)
