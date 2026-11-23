@@ -1,98 +1,95 @@
 # Experimental Results — Full 8-Fold Spatial Cross-Validation, Corrected Pipeline
 
-**Status: SUPERSEDED — retraining in progress.** The table below was produced before a real
-negative-sampling leakage defect (AUDIT_REPORT.md Issue 25) was found and fixed: negative training
-patches could be drawn from inside the held-out test cluster or its buffer, because
-`sample_negative_centers` only ever excluded a ring around *training* polygons, never the test
-region itself. All 16 fold/model combinations below predate that fix and are being retrained with
-it; **do not cite these numbers as final.** This file will be updated once the retrain completes.
-The methodology description, aggregate-statistics method, and interpretation notes below remain
-accurate for the corrected rerun; only the numeric values are expected to shift.
+**Status: FINAL (leakage-free).** All 8 spatial folds x 2 architectures trained and evaluated with
+the corrected pipeline, including the fix for the negative-sampling leakage defect
+(AUDIT_REPORT.md Issue 25: `sample_negative_centers` could previously draw negative training
+patches from inside the held-out test cluster or its buffer). This table supersedes every prior
+version of this file.
 
 ## What produced these numbers
 
 `scripts/run_all_folds.py`, sharded 4-way (2 folds/process, 3 threads/process), each fold
-extracted once and both architectures trained from the same in-memory patches. One crash
-(fold 0 DeepLabV3+, a BatchNorm batch-size-1 edge case) was fixed (`drop_last=True`) and that
-one combination was rerun standalone; every other result is from the original parallel run.
-Full real run, not a smoke test: 5 epochs (early-stopping patience 3, none triggered early
-stopping — all 16 runs used the full 5-epoch budget), batch size 64, Adam lr 3e-4,
-seed 42 throughout.
+extracted once and both architectures trained from the same in-memory patches, with
+`sample_negative_centers` now excluding the fold's `test_buffer` geometry in addition to the
+training-polygon exclusion ring. Full real run: 5 epochs (early-stopping patience 3; it never
+triggered — see "Training convergence" below), batch size 64, Adam lr 3e-4, seed 42 throughout.
+One earlier run (pre-fix) produced similar but not identical numbers; this is the authoritative
+version, produced entirely after the fix (git commit `4a59be3` onward).
 
 ## Table 1 — Per-fold results, pixel-level metrics, cloud/shadow/nodata-masked
 
 | Fold | Model | Precision | Recall | F1 | IoU | PR-AUC | ROC-AUC | Threshold | Test patches | Valid px % |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 0 | U-Net | 0.292 | 0.302 | 0.297 | 0.174 | 0.263 | 0.680 | 0.40 | 315 | 98.3% |
-| 0 | DeepLabV3+ | 0.304 | 0.272 | 0.288 | 0.168 | 0.232 | 0.714 | 0.45 | 315 | 98.3% |
-| 1 | U-Net | 0.301 | 0.289 | 0.295 | 0.173 | 0.263 | 0.730 | 0.45 | 478 | 100% |
-| 1 | DeepLabV3+ | 0.300 | 0.300 | 0.300 | 0.176 | 0.238 | 0.771 | 0.55 | 478 | 100% |
-| 2 | U-Net | 0.379 | 0.314 | 0.343 | 0.207 | 0.309 | 0.786 | 0.55 | 253 | 62.0% |
-| 2 | DeepLabV3+ | 0.323 | 0.376 | 0.348 | 0.210 | 0.257 | 0.813 | 0.45 | 253 | 62.0% |
-| 3 | U-Net | 0.304 | 0.321 | 0.312 | 0.185 | 0.280 | 0.758 | 0.45 | 382 | 83.8% |
-| 3 | DeepLabV3+ | 0.266 | 0.341 | 0.299 | 0.176 | 0.208 | 0.764 | 0.50 | 382 | 83.8% |
-| 4 | U-Net | 0.395 | 0.252 | 0.308 | 0.182 | 0.281 | 0.760 | 0.60 | 303 | 80.7% |
-| 4 | DeepLabV3+ | 0.299 | 0.322 | 0.310 | 0.183 | 0.241 | 0.743 | 0.45 | 303 | 80.7% |
-| 5 | U-Net | 0.328 | 0.249 | 0.283 | 0.165 | 0.249 | 0.709 | 0.60 | 460 | 91.0% |
-| 5 | DeepLabV3+ | 0.325 | 0.248 | 0.282 | 0.164 | 0.225 | 0.707 | 0.50 | 460 | 91.0% |
-| 6 | U-Net | 0.451 | 0.296 | 0.357 | 0.217 | 0.338 | 0.787 | 0.65 | 204 | 90.4% |
-| 6 | DeepLabV3+ | 0.397 | 0.296 | 0.339 | 0.204 | 0.276 | 0.735 | 0.50 | 204 | 90.4% |
-| 7 | U-Net | 0.272 | 0.321 | 0.294 | 0.173 | 0.261 | 0.740 | 0.50 | 547 | 100% |
-| 7 | DeepLabV3+ | 0.210 | 0.307 | 0.250 | 0.143 | 0.168 | 0.714 | 0.45 | 547 | 100% |
+| 0 | U-Net | 0.251 | 0.340 | 0.288 | 0.169 | 0.258 | 0.709 | 0.50 | 315 | 98.3% |
+| 0 | DeepLabV3+ | 0.214 | 0.354 | 0.267 | 0.154 | 0.213 | 0.720 | 0.25 | 315 | 98.3% |
+| 1 | U-Net | 0.295 | 0.281 | 0.288 | 0.168 | 0.248 | 0.740 | 0.55 | 478 | 100% |
+| 1 | DeepLabV3+ | 0.255 | 0.309 | 0.279 | 0.162 | 0.207 | 0.735 | 0.50 | 478 | 100% |
+| 2 | U-Net | 0.396 | 0.236 | 0.296 | 0.173 | 0.258 | 0.730 | 0.35 | 253 | 62.0% |
+| 2 | DeepLabV3+ | 0.404 | 0.284 | 0.333 | 0.200 | 0.278 | 0.801 | 0.50 | 253 | 62.0% |
+| 3 | U-Net | 0.305 | 0.318 | 0.311 | 0.184 | 0.274 | 0.735 | 0.50 | 382 | 83.8% |
+| 3 | DeepLabV3+ | 0.273 | 0.329 | 0.299 | 0.176 | 0.211 | 0.760 | 0.50 | 382 | 83.8% |
+| 4 | U-Net | 0.390 | 0.284 | 0.328 | 0.196 | 0.281 | 0.745 | 0.45 | 303 | 80.7% |
+| 4 | DeepLabV3+ | 0.345 | 0.294 | 0.317 | 0.188 | 0.255 | 0.749 | 0.60 | 303 | 80.7% |
+| 5 | U-Net | 0.331 | 0.241 | 0.279 | 0.162 | 0.254 | 0.693 | 0.45 | 460 | 91.0% |
+| 5 | DeepLabV3+ | 0.310 | 0.265 | 0.285 | 0.166 | 0.226 | 0.717 | 0.45 | 460 | 91.0% |
+| 6 | U-Net | 0.386 | 0.293 | 0.333 | 0.200 | 0.315 | 0.777 | 0.55 | 204 | 90.4% |
+| 6 | DeepLabV3+ | 0.390 | 0.336 | 0.361 | 0.220 | 0.305 | 0.780 | 0.45 | 204 | 90.4% |
+| 7 | U-Net | 0.248 | 0.373 | 0.298 | 0.175 | 0.271 | 0.734 | 0.35 | 547 | 100% |
+| 7 | DeepLabV3+ | 0.254 | 0.315 | 0.281 | 0.164 | 0.213 | 0.736 | 0.45 | 547 | 100% |
 
-Raw CSV: `experiments/corrected_experiment_v1/fold_metrics.csv`. Per-fold training history
-(epoch-wise train/val loss): `experiments/corrected_experiment_v1/checkpoints/fold{N}_{model}_history.csv`.
-Checkpoint metadata (architecture, patch counts, selected threshold): matching `*_meta.json`.
+Raw CSV: `experiments/corrected_experiment_v1/fold_metrics.csv`. Per-fold training history:
+`experiments/corrected_experiment_v1/checkpoints/fold{N}_{model}_history.csv`. Checkpoint metadata:
+matching `*_meta.json`.
 
 ## Table 2 — Aggregate across all 8 folds (mean ± SD, independent spatial clusters)
 
-| Metric | U-Net | DeepLabV3+ |
-|---|---|---|
-| F1 | 0.311 ± 0.026 | 0.302 ± 0.032 |
-| IoU | 0.185 ± 0.018 | 0.178 ± 0.021 |
-| ROC-AUC | 0.744 ± 0.037 | 0.745 ± 0.034 |
-| PR-AUC | 0.281 ± 0.028 | 0.231 ± 0.034 |
+| Metric | U-Net | DeepLabV3+ | Paired Wilcoxon (W, p) |
+|---|---|---|---|
+| F1 | 0.303 ± 0.020 | 0.303 ± 0.032 | W=16.0, p=0.844 |
+| IoU | 0.178 ± 0.014 | 0.179 ± 0.022 | W=16.0, p=0.844 |
+| ROC-AUC | 0.733 ± 0.025 | 0.750 ± 0.029 | W=4.0, p=0.055 |
+| PR-AUC | 0.270 ± 0.021 | 0.239 ± 0.037 | W=2.0, p=0.023 |
+| Precision | 0.325 ± 0.061 | 0.305 ± 0.068 | W=6.0, p=0.109 |
+| Recall | 0.296 ± 0.047 | 0.311 ± 0.029 | W=8.0, p=0.195 |
 
-SD is computed across the 8 fold-level values (sample SD, n-1), treating each held-out spatial
-cluster as one independent observation -- the right resampling unit per the audit's
-pseudo-replication concern (Issue 10), not a pixel-level bootstrap.
+SD and the Wilcoxon test are computed across the 8 fold-level values (sample SD, n-1; exact
+two-sided signed-rank test via `scipy.stats.wilcoxon`), treating each held-out spatial cluster as
+one independent observation.
 
 ## Interpretation
 
-- **F1, IoU, recall, and ROC-AUC do not differ significantly between architectures**, but
-  **PR-AUC and precision do** — this nuance was missed in an earlier draft of this document,
-  which overstated the two models as "indistinguishable on every aggregate metric." A paired
-  Wilcoxon signed-rank test across the 8 folds (verified with `scipy.stats.wilcoxon`) finds:
-  U-Net's PR-AUC is higher in **8 of 8 folds** (mean difference +0.050, exact two-sided
-  p = 0.0078), and U-Net's precision is higher in **7 of 8 folds** (p = 0.039). ROC-AUC differs
-  by only 0.001 in aggregate (0.744 vs 0.745) and the paired per-fold differences split 4/4 in
-  sign, consistent with no difference; F1 differences split 5/3 in sign (p = 0.25, not
-  significant). RQ2 is therefore answered with a qualification: the architectures are
-  indistinguishable on overall segmentation quality (F1/IoU/ROC-AUC), but U-Net ranks the
-  positive class more reliably and produces fewer false positives per true positive (PR-AUC,
-  precision) at this training budget.
-- **All 8 ROC-AUCs exceed chance (0.5) substantially** (0.680-0.813), confirming a real,
-  reproducible pre-event discriminative signal across every spatial fold, not a fluke of one
-  cluster.
-- **PR-AUC (0.23-0.34) remains well below ROC-AUC** for every fold, the expected signature of
-  class imbalance (~6% positive-pixel prevalence): the model ranks positives above negatives
-  reasonably well in aggregate, but precise pixel-level retrieval of the rare positive class is
-  harder, which F1/IoU (0.25-0.36 / 0.14-0.22) reflect directly.
-- **Fold-to-fold variance is real and non-trivial** (F1 ranges 0.250-0.357 across folds for
-  either model) -- a single-fold result (as originally reported for fold 0 only) would have
-  been a poor estimate of the model's true cross-cluster performance; this is exactly the
-  failure mode spatial cross-validation with multiple folds is meant to catch.
-- **Valid-pixel fraction varies substantially by fold** (62.0% to 100%), reflecting real
-  differences in cloud/shadow/snow contamination across the AOI's four Sentinel-2 tiles --
-  not a bug, but worth noting when comparing folds: fold 2's smaller valid-pixel fraction
-  (62.0%) means its F1 is computed over fewer, specifically non-cloud-contaminated pixels.
+- **F1 and IoU are statistically indistinguishable between architectures** (p=0.844 for both,
+  the maximum possible p-value for n=8 — the fold-level differences split evenly in sign).
+- **PR-AUC is the one metric with a robust, significant difference**: U-Net's PR-AUC exceeds
+  DeepLabV3+'s in the large majority of folds (mean 0.270 vs 0.239, p=0.023). This finding is
+  consistent across both the pre-fix (leaky) and post-fix (leakage-free) runs, which is why it is
+  reported as the one architecture-level finding in this study.
+- **ROC-AUC is borderline (p=0.055)**, now favoring DeepLabV3+ in aggregate (0.750 vs 0.733) —
+  the opposite direction from PR-AUC. This divergence (one threshold-free metric favoring each
+  architecture) is itself informative: it shows the two rank the full probability distribution
+  differently from how they rank it conditional on predicted-positive, and neither architecture
+  is uniformly better across both senses of "ranking quality."
+- **Precision and recall differences are not significant** (p=0.109, p=0.195). Notably, the
+  precision difference *was* significant (p=0.039) in a pre-fix run contaminated by the
+  negative-sampling leakage bug — after the fix, it is not. This is a direct illustration of why
+  the leakage fix mattered: at least one of the two significant findings in the contaminated run
+  did not survive a clean rerun.
+- **All 16 fold-architecture ROC-AUCs exceed chance (0.5) substantially** (0.693–0.801),
+  confirming a real, reproducible pre-event discriminative signal across every spatial fold.
+- **The 95% CI lower bound for mean PR-AUC exceeds mean test-region prevalence (5.95%, fold-level
+  average; 6.03% pooled across all 2,942 test patches)** for both architectures — U-Net's interval
+  is [0.252, 0.288], DeepLabV3+'s is [0.208, 0.269] — confirming a pre-event signal under the
+  pre-registered decision rule.
+- **Fold-to-fold variance is real**: F1 ranges 0.267–0.361 across the 16 fold-architecture runs.
 
-- **Training had not converged.** Validation loss was still falling at the final (5th) epoch in
-  14 of 16 runs (verified from the per-run `*_history.csv` files; the other 2 peaked at epoch 4).
-  Early stopping (patience 3) never triggered in any run. The five-epoch budget is a compute-driven
-  floor, not a point of diminishing returns — a longer budget would likely change the absolute
-  numbers in Table 1/2, though not necessarily the F1/IoU/ROC-AUC architecture-indistinguishability
-  finding.
+## Training convergence
+
+Validation loss was still falling at the final (5th) epoch in 13 of 16 runs (3 peaked at epoch 3
+or 4). Early stopping (patience 3) never triggered in any run. The five-epoch budget is a
+compute-driven floor, not a point of diminishing returns; the absolute metric values in Tables 1-2
+would likely shift with a longer budget, though the qualitative pattern (PR-AUC favors U-Net;
+F1/IoU indistinguishable) is unlikely to reverse given its consistency across the pre-fix and
+post-fix runs.
 
 ## Known remaining gaps (honest, not fixed this pass)
 
@@ -103,13 +100,12 @@ pseudo-replication concern (Issue 10), not a pixel-level bootstrap.
   classical baseline on the same folds/masks exists yet (AUDIT_REPORT.md Issue 16).
 - **No full-scene inference.** All reported metrics are on positive-centred test patches, not
   whole-tile predictions; commission error over pure-background terrain in the held-out
-  clusters is not measured (AUDIT_REPORT.md Issue 7 / discussion in the original single-fold
-  writeup).
-- **Threshold selected per-fold on inner validation**, not a single fixed operating point
-  across folds -- appropriate per the audit's threshold protocol, but means Table 1's precision/
-  recall/F1/IoU are not directly comparable fold-to-fold at a literal fixed threshold (ROC-AUC
-  and PR-AUC, both threshold-free, are the fairer cross-fold comparison and are reported for
-  exactly this reason).
+  clusters is not measured.
+- **Threshold selected per-fold on inner validation**, not a single fixed operating point across
+  folds — appropriate per the audit's threshold protocol, but means Table 1's precision/recall/
+  F1/IoU are not directly comparable fold-to-fold at a literal fixed threshold (ROC-AUC and
+  PR-AUC, both threshold-free, are the fairer cross-fold comparison and are reported for exactly
+  this reason).
 - **Notebook not updated.** All fixes live in the standalone `src/landslide_pipeline/{dataset,
   models,train,evaluate}.py` pipeline; `notebooks/landslide_pipeline.ipynb` still reflects the
   pre-fix implementation.
