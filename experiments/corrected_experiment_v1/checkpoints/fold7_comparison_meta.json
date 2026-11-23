@@ -4,10 +4,10 @@
   "arch": "DeepLabV3Plus",
   "encoder": "resnet34",
   "in_channels": 16,
-  "n_fit_patches": 2307,
+  "n_fit_patches": 2306,
   "n_val_patches": 405,
   "n_test_patches": 547,
-  "best_val_loss": 0.43000185915402006,
+  "best_val_loss": 0.426643648317882,
   "epochs_run": 5,
   "selected_threshold": 0.45
 }
