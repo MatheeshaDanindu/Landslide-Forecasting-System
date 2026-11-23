@@ -142,20 +142,32 @@ def build_patch(s2_ds, dem_ds, row: int, col: int, label_mask_full: np.ndarray,
     return stack, y.astype(np.float32), valid.astype(np.float32)
 
 
-_SLOPE_CACHE: dict = {}  # ponytail: process-local cache, same 4 DEM tiles get
-# reloaded + re-gradiented on every fold x model call otherwise -- 16x redundant
-# full-tile reads for data that never changes. Keyed by dem_ds.name (file path).
+_SLOPE_CACHE: dict = {}  # ponytail: process-local cache keyed by dem_ds.name.
+# A full-resolution tile is ~250MB as float32; with several parallel fold
+# processes each holding several tiles, that OOM'd a 12-core/limited-RAM box
+# in practice. A decimated (coarser) read is >100x smaller and is only ever
+# used for slope-stratified *negative sampling bins*, not the model's actual
+# input features (those still read full-resolution per-patch in build_patch),
+# so the lower precision here doesn't touch what the model sees.
+_SLOPE_DECIMATION = 20
 
 
 def _cached_tile_slope(dem_ds):
+    """Returns (slope_array, transform) at a decimated resolution."""
     key = dem_ds.name
     if key not in _SLOPE_CACHE:
-        dem = dem_ds.read(1).astype(np.float32)
+        from rasterio.enums import Resampling
+        out_h = max(1, dem_ds.height // _SLOPE_DECIMATION)
+        out_w = max(1, dem_ds.width // _SLOPE_DECIMATION)
+        dem = dem_ds.read(1, out_shape=(out_h, out_w), resampling=Resampling.average).astype(np.float32)
         nodata = dem_ds.nodata
         if nodata is not None:
             dem = np.where(dem == nodata, np.nan, dem)
-        slope, _ = _slope_aspect(np.nan_to_num(dem, nan=0.0), dem_ds.res[0])
-        _SLOPE_CACHE[key] = slope
+        coarse_res = dem_ds.res[0] * (dem_ds.width / out_w)
+        slope, _ = _slope_aspect(np.nan_to_num(dem, nan=0.0), coarse_res)
+        coarse_transform = dem_ds.transform * dem_ds.transform.scale(
+            dem_ds.width / out_w, dem_ds.height / out_h)
+        _SLOPE_CACHE[key] = (slope, coarse_transform)
     return _SLOPE_CACHE[key]
 
 
@@ -173,7 +185,7 @@ def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: f
     box = tile_box(s2_ds)
     left, bottom, right, top = box.bounds
 
-    slope = _cached_tile_slope(dem_ds)
+    slope, slope_transform = _cached_tile_slope(dem_ds)
     finite_slope = slope[np.isfinite(slope)]
     if finite_slope.size == 0:
         return []
@@ -187,11 +199,17 @@ def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: f
     for x, y in zip(xs, ys):
         if exclusion.contains(Point(x, y)):
             continue
+        # full-res pixel (for the returned patch center)
         col, row = ~s2_ds.transform * (x, y)
         row, col = int(row), int(col)
-        if row < 0 or col < 0 or row >= slope.shape[0] or col >= slope.shape[1]:
+        if row < 0 or col < 0 or row >= s2_ds.height or col >= s2_ds.width:
             continue
-        s = slope[row, col]
+        # coarse pixel (for the cheap slope lookup used only to stratify bins)
+        sc_col, sc_row = ~slope_transform * (x, y)
+        sc_row, sc_col = int(sc_row), int(sc_col)
+        if sc_row < 0 or sc_col < 0 or sc_row >= slope.shape[0] or sc_col >= slope.shape[1]:
+            continue
+        s = slope[sc_row, sc_col]
         if not np.isfinite(s):
             continue
         candidates.append((row, col, s))
