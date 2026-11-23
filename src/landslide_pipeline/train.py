@@ -97,7 +97,8 @@ def extract_fold_patches(cfg, fold: int, seed: int, rng: np.random.Generator,
                     centers = sample_negative_centers(
                         dem_ds, s2_ds, in_tile.geometry, neg_cfg["exclusion_buffer_m"],
                         n_total=neg_cfg["slope_bins"] * neg_cfg["n_per_bin"],
-                        bins=neg_cfg["slope_bins"], rng=rng)
+                        bins=neg_cfg["slope_bins"], rng=rng,
+                        extra_exclusion_geom=test_buffer)
                     empty_label = np.zeros((s2_ds.height, s2_ds.width), dtype=np.uint8)
                     half = patch_size // 2
                     for row, col in centers:

@@ -172,16 +172,26 @@ def _cached_tile_slope(dem_ds):
 
 
 def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: float,
-                             n_total: int, bins: int, rng: np.random.Generator):
+                             n_total: int, bins: int, rng: np.random.Generator,
+                             extra_exclusion_geom=None):
     """Slope-stratified negative centers within s2_ds's extent, outside
     `exclusion_buffer_m` of every positive polygon. Matches the positive
     set's slope distribution (via quantile binning) instead of a uniform
     random background, which would be trivially separable by slope alone.
     Returns a list of (row, col) pixel centers.
+
+    `extra_exclusion_geom`: an additional geometry to exclude candidates
+    from (e.g. the held-out test cluster's buffer). Without this, a tile
+    that spans both the training region and the held-out cluster can have
+    negative training patches sampled from inside the test cluster or its
+    buffer -- real spatial leakage the training-polygon-only exclusion ring
+    does not prevent.
     """
-    if len(positive_geoms) == 0:
+    if len(positive_geoms) == 0 and extra_exclusion_geom is None:
         return []
-    exclusion = positive_geoms.buffer(exclusion_buffer_m).union_all()
+    exclusion = positive_geoms.buffer(exclusion_buffer_m).union_all() if len(positive_geoms) else None
+    if extra_exclusion_geom is not None:
+        exclusion = extra_exclusion_geom if exclusion is None else exclusion.union(extra_exclusion_geom)
     box = tile_box(s2_ds)
     left, bottom, right, top = box.bounds
 
