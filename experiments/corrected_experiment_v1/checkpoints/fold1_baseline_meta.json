@@ -4,10 +4,10 @@
   "arch": "Unet",
   "encoder": "resnet34",
   "in_channels": 16,
-  "n_fit_patches": 2368,
+  "n_fit_patches": 2369,
   "n_val_patches": 416,
   "n_test_patches": 478,
-  "best_val_loss": 0.43051513603755404,
+  "best_val_loss": 0.42971387079783846,
   "epochs_run": 5,
-  "selected_threshold": 0.45
+  "selected_threshold": 0.55
 }
