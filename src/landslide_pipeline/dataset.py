@@ -142,6 +142,23 @@ def build_patch(s2_ds, dem_ds, row: int, col: int, label_mask_full: np.ndarray,
     return stack, y.astype(np.float32), valid.astype(np.float32)
 
 
+_SLOPE_CACHE: dict = {}  # ponytail: process-local cache, same 4 DEM tiles get
+# reloaded + re-gradiented on every fold x model call otherwise -- 16x redundant
+# full-tile reads for data that never changes. Keyed by dem_ds.name (file path).
+
+
+def _cached_tile_slope(dem_ds):
+    key = dem_ds.name
+    if key not in _SLOPE_CACHE:
+        dem = dem_ds.read(1).astype(np.float32)
+        nodata = dem_ds.nodata
+        if nodata is not None:
+            dem = np.where(dem == nodata, np.nan, dem)
+        slope, _ = _slope_aspect(np.nan_to_num(dem, nan=0.0), dem_ds.res[0])
+        _SLOPE_CACHE[key] = slope
+    return _SLOPE_CACHE[key]
+
+
 def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: float,
                              n_total: int, bins: int, rng: np.random.Generator):
     """Slope-stratified negative centers within s2_ds's extent, outside
@@ -156,11 +173,7 @@ def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: f
     box = tile_box(s2_ds)
     left, bottom, right, top = box.bounds
 
-    dem = dem_ds.read(1).astype(np.float32)
-    nodata = dem_ds.nodata
-    if nodata is not None:
-        dem = np.where(dem == nodata, np.nan, dem)
-    slope, _ = _slope_aspect(np.nan_to_num(dem, nan=0.0), dem_ds.res[0])
+    slope = _cached_tile_slope(dem_ds)
     finite_slope = slope[np.isfinite(slope)]
     if finite_slope.size == 0:
         return []
