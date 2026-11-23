@@ -1,9 +1,13 @@
 # Experimental Results — Full 8-Fold Spatial Cross-Validation, Corrected Pipeline
 
-**Status: COMPLETE.** All 8 spatial folds x 2 architectures trained and evaluated with the
-corrected pipeline (see AUDIT_REPORT.md / FIXES_APPLIED.md for what "corrected" means:
-masked focal-Dice loss, slope-stratified negatives, grouped inner validation, corrected
-minor-axis MMU filtering, cloud/shadow/nodata-masked metrics, validation-selected threshold).
+**Status: SUPERSEDED — retraining in progress.** The table below was produced before a real
+negative-sampling leakage defect (AUDIT_REPORT.md Issue 25) was found and fixed: negative training
+patches could be drawn from inside the held-out test cluster or its buffer, because
+`sample_negative_centers` only ever excluded a ring around *training* polygons, never the test
+region itself. All 16 fold/model combinations below predate that fix and are being retrained with
+it; **do not cite these numbers as final.** This file will be updated once the retrain completes.
+The methodology description, aggregate-statistics method, and interpretation notes below remain
+accurate for the corrected rerun; only the numeric values are expected to shift.
 
 ## What produced these numbers
 
@@ -55,11 +59,18 @@ pseudo-replication concern (Issue 10), not a pixel-level bootstrap.
 
 ## Interpretation
 
-- **Both architectures land within one SD of each other** on every aggregate metric. ROC-AUC
-  differs by 0.001 (0.744 vs 0.745); F1 differs by 0.009, well inside the ±0.026-0.032 fold
-  variability. There is no evidence of an architectural advantage for either model under this
-  data, loss, and training budget -- RQ2 ("how does U-Net compare with DeepLabV3+") is
-  answered: *indistinguishable at this scale of training*.
+- **F1, IoU, recall, and ROC-AUC do not differ significantly between architectures**, but
+  **PR-AUC and precision do** — this nuance was missed in an earlier draft of this document,
+  which overstated the two models as "indistinguishable on every aggregate metric." A paired
+  Wilcoxon signed-rank test across the 8 folds (verified with `scipy.stats.wilcoxon`) finds:
+  U-Net's PR-AUC is higher in **8 of 8 folds** (mean difference +0.050, exact two-sided
+  p = 0.0078), and U-Net's precision is higher in **7 of 8 folds** (p = 0.039). ROC-AUC differs
+  by only 0.001 in aggregate (0.744 vs 0.745) and the paired per-fold differences split 4/4 in
+  sign, consistent with no difference; F1 differences split 5/3 in sign (p = 0.25, not
+  significant). RQ2 is therefore answered with a qualification: the architectures are
+  indistinguishable on overall segmentation quality (F1/IoU/ROC-AUC), but U-Net ranks the
+  positive class more reliably and produces fewer false positives per true positive (PR-AUC,
+  precision) at this training budget.
 - **All 8 ROC-AUCs exceed chance (0.5) substantially** (0.680-0.813), confirming a real,
   reproducible pre-event discriminative signal across every spatial fold, not a fluke of one
   cluster.
@@ -76,8 +87,18 @@ pseudo-replication concern (Issue 10), not a pixel-level bootstrap.
   not a bug, but worth noting when comparing folds: fold 2's smaller valid-pixel fraction
   (62.0%) means its F1 is computed over fewer, specifically non-cloud-contaminated pixels.
 
+- **Training had not converged.** Validation loss was still falling at the final (5th) epoch in
+  14 of 16 runs (verified from the per-run `*_history.csv` files; the other 2 peaked at epoch 4).
+  Early stopping (patience 3) never triggered in any run. The five-epoch budget is a compute-driven
+  floor, not a point of diminishing returns — a longer budget would likely change the absolute
+  numbers in Table 1/2, though not necessarily the F1/IoU/ROC-AUC architecture-indistinguishability
+  finding.
+
 ## Known remaining gaps (honest, not fixed this pass)
 
+- **Sub-30 m polygons are rasterized as background, not excluded** (AUDIT_REPORT.md Issue 26):
+  when a small-object-cohort polygon falls inside a patch window, its pixels are silently labeled
+  negative rather than masked out. Conservative (can only suppress recall), but unquantified.
 - **No Random Forest baseline.** Comparison is only between the two CNN architectures; no
   classical baseline on the same folds/masks exists yet (AUDIT_REPORT.md Issue 16).
 - **No full-scene inference.** All reported metrics are on positive-centred test patches, not
