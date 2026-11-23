@@ -179,7 +179,7 @@ def sample_negative_centers(dem_ds, s2_ds, positive_geoms, exclusion_buffer_m: f
         return []
     bin_edges = np.quantile(finite_slope, np.linspace(0, 1, bins + 1))
 
-    n_try = max(n_total * 30, 200)
+    n_try = max(n_total * 10, 150)  # ponytail: 30x was overkill rejection-sampling headroom
     xs = rng.uniform(left, right, n_try)
     ys = rng.uniform(bottom, top, n_try)
     from shapely.geometry import Point

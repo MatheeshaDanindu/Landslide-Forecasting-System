@@ -9,8 +9,14 @@ Fixes applied relative to the notebook path (see repo AUDIT_REPORT.md):
     patches of the same polygon on both sides)
   - best-validation checkpoint is kept, not just the last epoch
   - early stopping on inner-val loss
+  - slope-stratified negative sampling, DEM-nodata masking
 
-Usage:
+`extract_fold_patches()` and `train_one_model()` are split out so a driver
+(scripts/run_all_folds.py) can extract a fold's patches once and train both
+architectures from the same in-memory patches, instead of each model
+re-running the (slow, single-threaded-anyway) rasterio/numpy extraction loop.
+
+Usage (single fold+model, still works standalone):
     PYTHONPATH=src python -m landslide_pipeline.train --fold 0 --model-key baseline
 """
 from __future__ import annotations
@@ -29,6 +35,7 @@ from .config import load_project_config
 from .dataset import (PatchDataset, assign_clusters, build_patch,
                        centroid_window_rc, load_labels, rasterize_polygons,
                        sample_negative_centers, tile_box)
+from .metrics import segmentation_metrics
 from .models import build_model_for_key
 from .training import focal_dice_loss, seed_everything
 
@@ -36,42 +43,29 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKPOINT_ROOT = REPO_ROOT / "experiments" / "corrected_experiment_v1" / "checkpoints"
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--fold", type=int, required=True, help="held-out cluster id (0-7)")
-    ap.add_argument("--model-key", choices=["baseline", "comparison"], default="baseline")
-    ap.add_argument("--epochs", type=int, default=None)
-    ap.add_argument("--patience", type=int, default=3)
-    ap.add_argument("--max-train-polygons", type=int, default=None,
-                     help="cap for a fast smoke run; omit for the full fold")
-    args = ap.parse_args()
-
-    cfg = load_project_config(REPO_ROOT)
-    prep, spatial, model_cfg = cfg["preprocessing"], cfg["spatial_cv"], cfg["model"]
-    seed = spatial["random_seed"]
-    seed_everything(seed)
-    rng = np.random.default_rng(seed)
-
+def extract_fold_patches(cfg, fold: int, seed: int, rng: np.random.Generator,
+                          max_train_polygons: int | None = None):
+    """Returns (fit_patches, val_patches, test_patches), each a list of
+    (x, y, valid_mask) triples -- shared across both architectures for a fold."""
+    prep, spatial = cfg["preprocessing"], cfg["spatial_cv"]
     patch_size = prep["patch"]["size_px"]
     res_m = prep["patch"]["resolution_m"]
     rscale = prep["reflectance_scale"]
     scl_exclude = set(prep["cloud_mask"]["scl_exclude"])
     min_minor = prep["labels"]["min_minor_axis_m"]
     buffer_m = spatial["buffer_m"]
+    neg_cfg = spatial["negative_sampling"]
 
-    # labels.path is DATA_DIR-relative; the raw S2/DEM tiles are REPO_ROOT-relative
-    # -- a real path inconsistency, see AUDIT_REPORT.md Issue 22.
     labels = assign_clusters(load_labels(REPO_ROOT / "data" / cfg["acquisition"]["labels"]["path"],
                                           prep["crs"]["metric"]),
                               spatial["clustering"]["n_clusters"], seed)
     primary = labels[labels["minor_axis_m"] >= min_minor]
-    test_poly = primary[primary["cluster"] == args.fold]
+    test_poly = primary[primary["cluster"] == fold]
     test_buffer = test_poly.geometry.buffer(buffer_m).union_all()
-    train_poly = primary[(primary["cluster"] != args.fold) & (~primary.geometry.within(test_buffer))]
-    if args.max_train_polygons:
-        train_poly = train_poly.iloc[:args.max_train_polygons]
+    train_poly = primary[(primary["cluster"] != fold) & (~primary.geometry.within(test_buffer))]
+    if max_train_polygons:
+        train_poly = train_poly.iloc[:max_train_polygons]
 
-    # grouped inner split by polygon_id -- never splits a polygon's own patch
     poly_ids = train_poly["polygon_id"].to_numpy()
     rng.shuffle(poly_ids)
     n_val = max(1, int(0.15 * len(poly_ids)))
@@ -79,8 +73,6 @@ def main():
 
     tile_dirs = sorted((REPO_ROOT / "raw" / "sentinel2").glob("tile*"))
     dem_tiles = sorted((REPO_ROOT / "raw" / "dem").glob("dem_tile*.tif"))
-
-    neg_cfg = spatial["negative_sampling"]
 
     def extract(poly_df, with_negatives=False):
         out, neg_out = [], []
@@ -122,34 +114,35 @@ def main():
     val_patches = [t[:3] for t in train_pos if t[3] in val_ids]
     test_patches = [t[:3] for t in test_pos]
 
-    # negatives have no polygon identity to group by -- an independent random
-    # 85/15 split per sampled location carries no leakage risk the way a
-    # patch-level split of positives would.
     rng.shuffle(train_neg)
     n_neg_val = max(1, int(0.15 * len(train_neg))) if train_neg else 0
     val_patches += train_neg[:n_neg_val]
     fit_patches += train_neg[n_neg_val:]
+    return fit_patches, val_patches, test_patches
 
-    print(f"fold={args.fold} model={args.model_key} "
-          f"fit={len(fit_patches)} (neg={len(train_neg)-n_neg_val}) "
-          f"val={len(val_patches)} test={len(test_patches)} patches")
+
+def train_one_model(cfg, fold: int, model_key: str, fit_patches, val_patches, test_patches,
+                     epochs: int | None = None, patience: int = 3):
+    """Trains one architecture on already-extracted patches; saves checkpoint +
+    meta.json; returns the meta dict (also written to disk)."""
+    model_cfg = cfg["model"]
     if not fit_patches:
-        print("No training patches assembled for this fold -- aborting.")
-        return
+        print(f"fold={fold} model={model_key}: no training patches -- aborting.")
+        return None
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_model_for_key(cfg, args.model_key).to(device)
+    model = build_model_for_key(cfg, model_key).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=model_cfg["training"]["learning_rate"])
     loss_cfg = model_cfg["loss"]
-    epochs = args.epochs or model_cfg["training"]["epochs"]
+    epochs = epochs or model_cfg["training"]["epochs"]
     batch_size = model_cfg["training"]["batch_size"]
 
     fit_loader = torch.utils.data.DataLoader(PatchDataset(fit_patches), batch_size=batch_size, shuffle=True)
     val_loader = torch.utils.data.DataLoader(PatchDataset(val_patches), batch_size=batch_size) if val_patches else None
 
     CHECKPOINT_ROOT.mkdir(parents=True, exist_ok=True)
-    ckpt_path = CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}.pt"
-    history_path = CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}_history.csv"
+    ckpt_path = CHECKPOINT_ROOT / f"fold{fold}_{model_key}.pt"
+    history_path = CHECKPOINT_ROOT / f"fold{fold}_{model_key}_history.csv"
 
     best_val = float("inf")
     bad_epochs = 0
@@ -183,8 +176,8 @@ def main():
 
         train_loss = float(np.mean(train_losses))
         history.append({"epoch": epoch, "train_loss": train_loss, "val_loss": val_loss})
-        print(f"  epoch {epoch}: train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
-              f"({time.time()-t0:.0f}s elapsed)")
+        print(f"  fold={fold} model={model_key} epoch {epoch}: train_loss={train_loss:.4f} "
+              f"val_loss={val_loss:.4f} ({time.time()-t0:.0f}s elapsed)", flush=True)
 
         monitor = val_loss if val_loader else train_loss
         if monitor < best_val:
@@ -193,8 +186,9 @@ def main():
             torch.save(model.state_dict(), ckpt_path)
         else:
             bad_epochs += 1
-            if bad_epochs >= args.patience:
-                print(f"  early stopping at epoch {epoch} (patience={args.patience})")
+            if bad_epochs >= patience:
+                print(f"  fold={fold} model={model_key} early stopping at epoch {epoch} "
+                      f"(patience={patience})", flush=True)
                 break
 
     with open(history_path, "w", newline="") as f:
@@ -202,12 +196,8 @@ def main():
         w.writeheader()
         w.writerows(history)
 
-    # Threshold selection on inner validation only, frozen before the outer
-    # test cluster is ever touched (Issue 11) -- reload the best checkpoint,
-    # sweep 0.05-0.95, pick the F1-maximizing threshold on val_patches.
     selected_threshold = 0.5
     if val_patches:
-        from .metrics import segmentation_metrics
         model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=False))
         model.eval()
         all_y, all_p, all_m = [], [], []
@@ -225,19 +215,44 @@ def main():
             if f1 > best_f1:
                 best_f1, best_t = f1, float(t)
         selected_threshold = best_t
-        print(f"  validation-selected threshold: {selected_threshold:.2f} (val F1={best_f1:.4f})")
+        print(f"  fold={fold} model={model_key} validation-selected threshold: "
+              f"{selected_threshold:.2f} (val F1={best_f1:.4f})", flush=True)
 
     meta = {
-        "fold": args.fold, "model_key": args.model_key, "arch": model_cfg[args.model_key]["arch"],
-        "encoder": model_cfg[args.model_key]["encoder"], "in_channels": model_cfg["input_channels"],
-        "seed": seed, "n_fit_patches": len(fit_patches), "n_val_patches": len(val_patches),
+        "fold": fold, "model_key": model_key, "arch": model_cfg[model_key]["arch"],
+        "encoder": model_cfg[model_key]["encoder"], "in_channels": model_cfg["input_channels"],
+        "n_fit_patches": len(fit_patches), "n_val_patches": len(val_patches),
         "n_test_patches": len(test_patches), "best_val_loss": best_val, "epochs_run": len(history),
         "selected_threshold": selected_threshold,
     }
-    with open(CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}_meta.json", "w") as f:
+    with open(CHECKPOINT_ROOT / f"fold{fold}_{model_key}_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
-    print(f"Saved best checkpoint to {ckpt_path}")
-    print(json.dumps(meta, indent=2))
+    print(f"  fold={fold} model={model_key}: saved best checkpoint to {ckpt_path}", flush=True)
+    return meta
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--fold", type=int, required=True, help="held-out cluster id (0-7)")
+    ap.add_argument("--model-key", choices=["baseline", "comparison"], default="baseline")
+    ap.add_argument("--epochs", type=int, default=None)
+    ap.add_argument("--patience", type=int, default=3)
+    ap.add_argument("--max-train-polygons", type=int, default=None,
+                     help="cap for a fast smoke run; omit for the full fold")
+    args = ap.parse_args()
+
+    cfg = load_project_config(REPO_ROOT)
+    seed = cfg["spatial_cv"]["random_seed"]
+    seed_everything(seed)
+    rng = np.random.default_rng(seed)
+
+    fit_patches, val_patches, test_patches = extract_fold_patches(
+        cfg, args.fold, seed, rng, args.max_train_polygons)
+    print(f"fold={args.fold} fit={len(fit_patches)} val={len(val_patches)} test={len(test_patches)} patches")
+    meta = train_one_model(cfg, args.fold, args.model_key, fit_patches, val_patches, test_patches,
+                            epochs=args.epochs, patience=args.patience)
+    if meta:
+        print(json.dumps(meta, indent=2))
 
 
 if __name__ == "__main__":
