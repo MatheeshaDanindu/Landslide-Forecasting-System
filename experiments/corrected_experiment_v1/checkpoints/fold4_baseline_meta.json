@@ -1,0 +1,13 @@
+{
+  "fold": 4,
+  "model_key": "baseline",
+  "arch": "Unet",
+  "encoder": "resnet34",
+  "in_channels": 16,
+  "n_fit_patches": 2563,
+  "n_val_patches": 451,
+  "n_test_patches": 303,
+  "best_val_loss": 0.441992174834013,
+  "epochs_run": 5,
+  "selected_threshold": 0.6000000000000001
+}
