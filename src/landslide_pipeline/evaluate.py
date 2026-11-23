@@ -60,7 +60,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fold", type=int, required=True)
     ap.add_argument("--model-key", choices=["baseline", "comparison"], default="baseline")
-    ap.add_argument("--threshold", type=float, default=0.5)
+    ap.add_argument("--threshold", type=float, default=None,
+                     help="defaults to the fold's validation-selected threshold if a "
+                          "*_meta.json exists, else 0.5")
     args = ap.parse_args()
 
     cfg = load_project_config(REPO_ROOT)
@@ -83,6 +85,15 @@ def main():
         return
 
     ckpt_path = CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}.pt"
+    threshold = args.threshold
+    meta_path = CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}_meta.json"
+    if threshold is None:
+        if meta_path.exists():
+            threshold = json.loads(meta_path.read_text())["selected_threshold"]
+            print(f"Using validation-selected threshold {threshold:.2f} from {meta_path.name}")
+        else:
+            threshold = 0.5
+    args.threshold = threshold
     if not ckpt_path.exists():
         # fall back to the pre-existing repo checkpoint for fold 0, so this
         # script also works before any corrected retrain has been run

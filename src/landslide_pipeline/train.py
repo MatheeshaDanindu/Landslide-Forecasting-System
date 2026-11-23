@@ -26,8 +26,9 @@ import rasterio
 import torch
 
 from .config import load_project_config
-from .dataset import (PatchDataset, assign_clusters, build_patch, load_labels,
-                       tile_box)
+from .dataset import (PatchDataset, assign_clusters, build_patch,
+                       centroid_window_rc, load_labels, rasterize_polygons,
+                       sample_negative_centers, tile_box)
 from .models import build_model_for_key
 from .training import focal_dice_loss, seed_everything
 
@@ -79,8 +80,10 @@ def main():
     tile_dirs = sorted((REPO_ROOT / "raw" / "sentinel2").glob("tile*"))
     dem_tiles = sorted((REPO_ROOT / "raw" / "dem").glob("dem_tile*.tif"))
 
-    def extract(poly_df):
-        out = []
+    neg_cfg = spatial["negative_sampling"]
+
+    def extract(poly_df, with_negatives=False):
+        out, neg_out = [], []
         for ti, tile_dir in enumerate(tile_dirs):
             tifs = sorted(tile_dir.glob("openEO_*.tif"))
             if not tifs or ti >= len(dem_tiles):
@@ -90,23 +93,46 @@ def main():
                 in_tile = poly_df[poly_df.geometry.centroid.within(box)]
                 if len(in_tile) == 0:
                     continue
-                label_full = __import__("landslide_pipeline.dataset", fromlist=["rasterize_polygons"]) \
-                    .rasterize_polygons(in_tile, s2_ds.transform, (s2_ds.height, s2_ds.width))
+                label_full = rasterize_polygons(in_tile, s2_ds.transform, (s2_ds.height, s2_ds.width))
                 for _, row_data in in_tile.iterrows():
                     cx, cy = row_data.geometry.centroid.x, row_data.geometry.centroid.y
-                    from .dataset import centroid_window_rc
                     r, c = centroid_window_rc(cx, cy, s2_ds.transform, patch_size)
                     x, y, m = build_patch(s2_ds, dem_ds, r, c, label_full, patch_size, res_m, rscale, scl_exclude)
                     if x is not None:
                         out.append((x, y, m, int(row_data["polygon_id"])))
-        return out
 
-    fit_patches = [t[:3] for t in extract(train_poly) if t[3] in fit_ids]
-    val_patches = [t[:3] for t in extract(train_poly) if t[3] in val_ids]
-    test_patches = [t[:3] for t in extract(test_poly)]
+                if with_negatives:
+                    centers = sample_negative_centers(
+                        dem_ds, s2_ds, in_tile.geometry, neg_cfg["exclusion_buffer_m"],
+                        n_total=neg_cfg["slope_bins"] * neg_cfg["n_per_bin"],
+                        bins=neg_cfg["slope_bins"], rng=rng)
+                    empty_label = np.zeros((s2_ds.height, s2_ds.width), dtype=np.uint8)
+                    half = patch_size // 2
+                    for row, col in centers:
+                        x, y, m = build_patch(s2_ds, dem_ds, row - half, col - half, empty_label,
+                                               patch_size, res_m, rscale, scl_exclude)
+                        if x is not None:
+                            neg_out.append((x, y, m))
+        return out, neg_out
+
+    train_pos, train_neg = extract(train_poly, with_negatives=True)
+    test_pos, _ = extract(test_poly, with_negatives=False)
+
+    fit_patches = [t[:3] for t in train_pos if t[3] in fit_ids]
+    val_patches = [t[:3] for t in train_pos if t[3] in val_ids]
+    test_patches = [t[:3] for t in test_pos]
+
+    # negatives have no polygon identity to group by -- an independent random
+    # 85/15 split per sampled location carries no leakage risk the way a
+    # patch-level split of positives would.
+    rng.shuffle(train_neg)
+    n_neg_val = max(1, int(0.15 * len(train_neg))) if train_neg else 0
+    val_patches += train_neg[:n_neg_val]
+    fit_patches += train_neg[n_neg_val:]
 
     print(f"fold={args.fold} model={args.model_key} "
-          f"fit={len(fit_patches)} val={len(val_patches)} test={len(test_patches)} patches")
+          f"fit={len(fit_patches)} (neg={len(train_neg)-n_neg_val}) "
+          f"val={len(val_patches)} test={len(test_patches)} patches")
     if not fit_patches:
         print("No training patches assembled for this fold -- aborting.")
         return
@@ -176,11 +202,37 @@ def main():
         w.writeheader()
         w.writerows(history)
 
+    # Threshold selection on inner validation only, frozen before the outer
+    # test cluster is ever touched (Issue 11) -- reload the best checkpoint,
+    # sweep 0.05-0.95, pick the F1-maximizing threshold on val_patches.
+    selected_threshold = 0.5
+    if val_patches:
+        from .metrics import segmentation_metrics
+        model.load_state_dict(torch.load(ckpt_path, map_location=device, weights_only=False))
+        model.eval()
+        all_y, all_p, all_m = [], [], []
+        with torch.no_grad():
+            for x, y, m in val_loader:
+                probs = torch.sigmoid(model(x.to(device))).cpu().numpy()
+                for j in range(len(y)):
+                    all_y.append(y[j].numpy().ravel())
+                    all_p.append(probs[j, 0].ravel())
+                    all_m.append(m[j].numpy().ravel().astype(bool))
+        y_val, p_val, m_val = np.concatenate(all_y), np.concatenate(all_p), np.concatenate(all_m)
+        best_f1, best_t = -1.0, 0.5
+        for t in np.arange(0.05, 0.96, 0.05):
+            f1 = segmentation_metrics(y_val, p_val, threshold=float(t), valid_mask=m_val)["f1"]
+            if f1 > best_f1:
+                best_f1, best_t = f1, float(t)
+        selected_threshold = best_t
+        print(f"  validation-selected threshold: {selected_threshold:.2f} (val F1={best_f1:.4f})")
+
     meta = {
         "fold": args.fold, "model_key": args.model_key, "arch": model_cfg[args.model_key]["arch"],
         "encoder": model_cfg[args.model_key]["encoder"], "in_channels": model_cfg["input_channels"],
         "seed": seed, "n_fit_patches": len(fit_patches), "n_val_patches": len(val_patches),
         "n_test_patches": len(test_patches), "best_val_loss": best_val, "epochs_run": len(history),
+        "selected_threshold": selected_threshold,
     }
     with open(CHECKPOINT_ROOT / f"fold{args.fold}_{args.model_key}_meta.json", "w") as f:
         json.dump(meta, f, indent=2)
